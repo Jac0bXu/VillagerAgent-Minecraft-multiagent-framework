@@ -34,7 +34,10 @@ mineflayer = require('mineflayer')
 pathfinder = require('mineflayer-pathfinder')
 collectBlock = require('mineflayer-collectblock')
 pvp = require("mineflayer-pvp").plugin
-minecraftHawkEye = require("minecrafthawkeye")
+try:
+    minecraftHawkEye = require("minecrafthawkeye")
+except Exception:
+    minecraftHawkEye = None
 Vec3 = require("vec3")
 # viewer = require('prismarine-viewer').mineflayer
 Socks = require("socks5-client")
@@ -53,7 +56,9 @@ time.sleep(3)
 bot.loadPlugin(pathfinder.pathfinder)
 bot.loadPlugin(collectBlock.plugin)
 bot.loadPlugin(pvp)
-bot.loadPlugin(minecraftHawkEye)
+# minecraftHawkEye disabled — incompatible with current mineflayer
+# if minecraftHawkEye is not None:
+#     bot.loadPlugin(minecraftHawkEye)
 
 
 def timeout(seconds: float):

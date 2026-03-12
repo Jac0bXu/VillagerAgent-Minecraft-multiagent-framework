@@ -37,10 +37,13 @@ mineflayer = require('mineflayer')
 pathfinder = require('mineflayer-pathfinder')
 collectBlock = require('mineflayer-collectblock')
 pvp = require("mineflayer-pvp").plugin
-if system_type == 'linux':
-    minecraftHawkEye = require("minecrafthawkeye").default
-else:
-    minecraftHawkEye = require("minecrafthawkeye")
+try:
+    if system_type == 'linux':
+        minecraftHawkEye = require("minecrafthawkeye").default
+    else:
+        minecraftHawkEye = require("minecrafthawkeye")
+except Exception:
+    minecraftHawkEye = None
 Vec3 = require("vec3")
 Socks = require("socks5-client")
 minecraftData = require('minecraft-data')
@@ -57,7 +60,9 @@ bot = mineflayer.createBot({
 bot.loadPlugin(pathfinder.pathfinder)
 bot.loadPlugin(collectBlock.plugin)
 bot.loadPlugin(pvp)
-bot.loadPlugin(minecraftHawkEye)
+# minecraftHawkEye disabled — incompatible with current mineflayer version
+# if minecraftHawkEye is not None:
+#     bot.loadPlugin(minecraftHawkEye)
 
 ### reset the environments
 with open("data/score.json", "w") as f:

@@ -32,12 +32,18 @@ collectBlock = require('mineflayer-collectblock')
 pvp = require("mineflayer-pvp").plugin
 Vec3 = require("vec3")
 
-if system_type == 'linux':
-    minecraftHawkEye = require("minecrafthawkeye").default
-else:
-    minecraftHawkEye = require("minecrafthawkeye")
+try:
+    if system_type == 'linux':
+        minecraftHawkEye = require("minecrafthawkeye").default
+    else:
+        minecraftHawkEye = require("minecrafthawkeye")
+except Exception:
+    minecraftHawkEye = None
 
-mineflayerViewer = require('prismarine-viewer').mineflayer
+try:
+    mineflayerViewer = require('prismarine-viewer').mineflayer
+except Exception:
+    mineflayerViewer = None
 Socks = require("socks5-client")
 minecraftData = require('minecraft-data')
 mcData = minecraftData('1.19.2')
@@ -55,7 +61,9 @@ Item = require("prismarine-item")(bot.registry)
 bot.loadPlugin(pathfinder.pathfinder)
 bot.loadPlugin(collectBlock.plugin)
 bot.loadPlugin(pvp)
-bot.loadPlugin(minecraftHawkEye)
+# minecraftHawkEye disabled — incompatible with current mineflayer version
+# if minecraftHawkEye is not None:
+#     bot.loadPlugin(minecraftHawkEye)
 
 VISIBLE_ONLY = True # 是否只看到可见的方块 | False: 开金手指
 
@@ -93,7 +101,9 @@ def log_activity(bot):
                 bot.loadPlugin(pathfinder.pathfinder)
                 bot.loadPlugin(collectBlock.plugin)
                 bot.loadPlugin(pvp)
-                bot.loadPlugin(minecraftHawkEye)
+                # minecraftHawkEye disabled
+                # if minecraftHawkEye is not None:
+                #     bot.loadPlugin(minecraftHawkEye)
                 # 这里改成重新启动bot
 
         return wrapper

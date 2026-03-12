@@ -25,18 +25,9 @@ def run(api_model: str, api_base: str, task_type: str, task_idx: int, agent_num:
 
     api_key_list = json.load(open("API_KEY_LIST", "r"))["AGENT_KEY"]
 
-    # Agent.base_url = "https://api.deepseek.com/v1"
-    # Agent.model = "deepseek-chat"
-
-    # Agent.base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    # # Agent.model = "qwen3-235b-a22b"
-    # Agent.model = "qwen3-next-80b-a3b-instruct"
-    # Agent.api_key_list = api_key_list
-
-    # Agent.base_url = "http://10.112.59.240:55049/v1"
-    Agent.base_url = "http://localhost:8269/v1/"
-    Agent.model = "default"
-    Agent.api_key_list = ["sk-VillagerTuning"]
+    Agent.base_url = "https://api.openai.com/v1"
+    Agent.model = "gpt-4o"
+    Agent.api_key_list = api_key_list
 
     # 设置env
     if task_type == "construction":
@@ -117,58 +108,14 @@ def run(api_model: str, api_base: str, task_type: str, task_idx: int, agent_num:
         # 设置llm
         llm_config = {
             "api_key": api_key_list[0],
-            "api_base": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-            "api_model": "qwen3-next-80b-a3b-instruct",
-            # "api_model": "qwen-max",
+            "api_base": "https://api.openai.com/v1",
+            "api_model": "gpt-4o",
             "api_key_list": api_key_list
         }
-        # llm_config = {
-        #     "api_key": api_key_list[0],
-        #     "api_base": "https://api.deepseek.com/v1",
-        #     "api_model": "deepseek-chat",
-        #     "api_key_list": api_key_list
-        # }
-        
-        # llm_config = {
-        #     "api_key": "sk-VillagerTuning",
-        #     # "api_base": "http://10.112.59.240:50892/v1",
-        #     "api_base": "http://localhost:8264/v1/",
-        #     "api_model": "default",
-        #     "api_key_list": ["sk-VillagerTuning"]
-        # }
 
         tm_llm_config = llm_config
         dm_llm_config = llm_config
-        # base_llm_config = llm_config
-
-
-        # tm_llm_config = {
-        #     "api_key": api_key_list[0],
-        #     "api_base": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-        #     "api_model": "qwen-max",
-        #     "api_key_list": api_key_list
-        # }
-
-        # dm_llm_config = {
-        #     "api_key": api_key_list[0],
-        #     "api_base": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-        #     "api_model": "qwen-plus",
-        #     "api_key_list": api_key_list
-        # }
-
-        # base_llm_config = {
-        #     "api_key": api_key_list[0],
-        #     "api_base": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-        #     "api_model": "qwen3-next-80b-a3b-instruct",
-        #     "api_key_list": api_key_list
-        # }
-        base_llm_config = {
-            "api_key": "sk-VillagerTuning",
-            # "api_base": "http://10.112.59.240:50892/v1",
-            "api_base": "http://localhost:8269/v1/",
-            "api_model": "default",
-            "api_key_list": ["sk-VillagerTuning"]
-        }
+        base_llm_config = llm_config
 
 
         ctrl = GlobalController(llm_config, tm, dm, env, 
@@ -208,7 +155,7 @@ def run(api_model: str, api_base: str, task_type: str, task_idx: int, agent_num:
 if __name__ == "__main__":
     # with open("qwen3_235b_a22b_launch_config_farming.json", "r") as f:
     # with open("/home/yubo/VillagerAgent-Minecraft-multiagent-framework/test_config.json", "r") as f:
-    with open("base_agent_multi_test_config.json", "r") as f:
+    with open("gpt_4o_launch_config_meta.json", "r") as f:
         launch_config = json.load(f)
     # shuffle 
     # launch_config = random.sample(launch_config, len(launch_config))
@@ -233,19 +180,10 @@ if __name__ == "__main__":
 
         llm_config = {
             "api_key": api_key_list[0],
-            "api_base": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-            "api_model": "qwen3-next-80b-a3b-instruct",
-            # "api_model": "qwen-max",
+            "api_base": "https://api.openai.com/v1",
+            "api_model": "gpt-4o",
             "api_key_list": api_key_list
         }
-
-        # llm_config = {
-        #     "api_key": "sk-VillagerTuning",
-        #     # "api_base": "http://10.112.59.240:50892/v1",
-        #     "api_base": "http://localhost:8264/v1/",
-        #     "api_model": "default",
-        #     "api_key_list": ["sk-VillagerTuning"]
-        # }
         
         process = multiprocessing.Process(target=run,
                                             args=(llm_config["api_model"],

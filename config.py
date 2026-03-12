@@ -34,8 +34,8 @@ api_key_list = json.load(open("API_KEY_LIST", "r"))["AGENT_KEY"]
 # }
 llm_config = {
     "api_key": api_key_list[0],
-    "api_base": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-    "api_model": "qwen3-235b-a22b",
+    "api_base": "https://api.openai.com/v1",
+    "api_model": "gpt-4o",
     "api_key_list": api_key_list
 }
 
@@ -75,8 +75,8 @@ You should randomly select only one sentence from your rewritten version and ret
 """
 
 template = {
-    "api_model": "qwen_max",
-    "api_base": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "api_model": "gpt-4o",
+    "api_base": "https://api.openai.com/v1",
     "task_type": "meta",
     "task_idx": 0,
     "agent_num": 1,
@@ -97,7 +97,7 @@ template = {
         "other_arg": []
     },
     "document_file": "",
-    "host": "10.214.180.148",
+    "host": "localhost",
     "port": 25565,
     "task_name": ""
 }
@@ -1026,7 +1026,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--task", type=str, default="meta", help="task type")
     parser.add_argument("--api_model", type=str, default="qwen-max", help="api model")
-    parser.add_argument("--host", type=str, default="10.214.180.148", help="host")
+    parser.add_argument("--host", type=str, default="localhost", help="host")
     parser.add_argument("--port", type=int, default=25565, help="port")
     parser.add_argument("--agent_num", type=int, default=1, help="agent number")
     parser.add_argument("--meta_task_num", type=int, default=100, help="meta task number")

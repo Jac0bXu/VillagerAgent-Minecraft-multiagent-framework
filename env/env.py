@@ -50,7 +50,7 @@ class VillagerBench:
         self.dig_needed = dig_needed  # For construction
         self.launch_time = None
         self.langchain_model = ""
-        self.base_port = 5000
+        self.base_port = 5001
         self.op_path = ""
         if not os.path.exists("data"):
             os.mkdir("data")
