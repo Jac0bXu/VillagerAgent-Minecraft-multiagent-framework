@@ -1,32 +1,14 @@
 {
-    "api_model": "gpt_4o",
-    "api_base": "https://api.openai.com/v1",
-    "task_type": "meta",
-    "task_idx": 0,
-    "agent_num": 1,
+    "api_model": "gpt-4o",
+    "api_base": "https://api.poe.com/v1",
+    "task_type": "construction",
+    "task_idx": 99,
+    "agent_num": 2,
     "dig_needed": false,
     "max_task_num": 0,
-    "task_goal": "Begin by positioning the oak_sapling at coordinates (23, -60, 14), and afterward, apply bone_meal to encourage its growth. Both the bone_meal and the oak_sapling are available in your inventory.",
-    "task_scenario": "interact",
-    "evaluation_arg": {
-        "target": "bone_meal",
-        "x": 23,
-        "y": -60,
-        "z": 14,
-        "facing": "",
-        "item_position": "inventory",
-        "tool": "bone_meal",
-        "action": "bone_meal",
-        "step": 1,
-        "other_arg": [
-            {
-                "base_block": "dirt_path",
-                "crops": "oak_sapling"
-            }
-        ]
-    },
-    "document_file": "",
+    "task_goal": "Using the provided blueprint, please collaborate to place blocks in Minecraft. You can use materials from both your inventory and the chest. The task is complete once the blueprint is fully built.",
+    "document_file": "data/map_description.json",
     "host": "localhost",
     "port": 25565,
-    "task_name": "interact_bone_meal_id9_031122"
+    "task_name": "gpt_4o_construction_task99_2p"
 }
