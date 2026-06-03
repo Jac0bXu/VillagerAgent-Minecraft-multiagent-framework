@@ -4,16 +4,33 @@ import os
 import numpy as np
 import time
 import json
-from sklearn.cluster import HDBSCAN
-from sklearn.preprocessing import MinMaxScaler
+import threading
 from javascript import require, On
 
 import logging
 import colorlog
 
-from FlagEmbedding import LLMEmbedder
 sys.path.append(os.getcwd())
 from model import openai_models
+
+
+def install_chat_throttle(bot, min_interval=0.35):
+    """Throttle Mineflayer chat/command sends so vanilla servers do not kick judgers."""
+    raw_chat = bot.chat
+    lock = threading.Lock()
+    state = {"last_send": 0.0}
+
+    def throttled_chat(message):
+        with lock:
+            wait_time = min_interval - (time.time() - state["last_send"])
+            if wait_time > 0:
+                time.sleep(wait_time)
+            result = raw_chat(message)
+            state["last_send"] = time.time()
+            return result
+
+    bot.chat = throttled_chat
+    return bot
 
 
 
@@ -114,11 +131,13 @@ def building_material_load(path,bot,dig_needed=False,inventory_load=False,agent_
             if "potted" in name:
                 name = name.replace("potted_","")
                 bot.chat(f'/item replace block -4 -60 0 container.{slot} with minecraft:{name} {64}')
-                #[DEBUG] 
+                time.sleep(.15)
+                #[DEBUG]
                 # print(f'/item replace block -4 -60 0 container.{slot} with minecraft:{name} {64}')
                 slot += 1
                 name = "flower_pot"
                 bot.chat(f'/item replace block -4 -60 0 container.{slot} with minecraft:{name} {64}')
+                time.sleep(.15)
                 #[DEBUG] print(f'/item replace block -4 -60 0 container.{slot} with minecraft:{name} {64}')
                 amount -= 64
             elif "_wall_" in name:
@@ -229,6 +248,10 @@ def material_factory_load(path,bot,envs_info,mcData,center_pos=[0,-60,0],rate = 
     return material_pairs
 
 def split_structure(building):
+    from FlagEmbedding import LLMEmbedder
+    from sklearn.cluster import HDBSCAN
+    from sklearn.preprocessing import MinMaxScaler
+
     print("Loading model...")
     model = LLMEmbedder('BAAI/llm-embedder', use_fp16=True)
 

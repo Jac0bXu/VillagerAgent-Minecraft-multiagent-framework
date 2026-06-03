@@ -16,6 +16,7 @@ import datetime
 import threading
 from functools import wraps
 import os
+import sys
 import random
 import platform
 
@@ -282,7 +283,7 @@ class Agent():
             if fast:
                 try:
                     Agent.agent_process[key] = subprocess.Popen(
-                        ["python", "env/minecraft_server_fast.py", "-H", host, "-P", str(port), "-LP", str(value), "-U", key, "-W",
+                        [sys.executable, "env/minecraft_server_fast.py", "-H", host, "-P", str(port), "-LP", str(value), "-U", key, "-W",
                     world, "-D", str(debug)], shell=False, env=env)
                     print(f"python env/minecraft_server_fast.py -H \"{host}\" -P {port} -LP {value} -U \"{key}\" -W \"{world}\" -D {debug}")
                 except Exception as e:
@@ -291,7 +292,7 @@ class Agent():
                 time.sleep(10)
             else:
                 Agent.agent_process[key] = subprocess.Popen(
-                    ["python", "env/minecraft_server.py", "-H", host, "-P", str(port), "-LP", str(value), "-U", key, "-W",
+                    [sys.executable, "env/minecraft_server.py", "-H", host, "-P", str(port), "-LP", str(value), "-U", key, "-W",
                  world, "-D", str(debug)], shell=False, env=env)
                 print(f"python env/minecraft_server.py -H \"{host}\" -P {port} -LP {value} -U \"{key}\" -W \"{world}\" -D {debug}")
                 time.sleep(2)

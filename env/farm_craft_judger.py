@@ -56,6 +56,7 @@ if __name__ == '__main__':
         'auth': 'offline',
         'version': "1.19.2"
     })
+    # NOTE: No throttle — Python sleep() wrapper causes JS bridge timeout.
 
     with open("data/farm_setting.json", "r") as f:
         settings = json.load(f)
@@ -614,4 +615,3 @@ if __name__ == '__main__':
                         inventory[i] = {"name": name, "count": count}
 
                 score, cooperation = calculate_score(agent_name, inventory)
-

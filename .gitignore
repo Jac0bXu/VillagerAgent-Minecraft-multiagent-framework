@@ -55,6 +55,8 @@ rl_env/replay_buffer/*
 rl_env/tasks/*
 
 node_modules/*
+.venv/
+.venv312/
 100_meta.json
 filtered_tasks.json
 

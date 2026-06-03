@@ -3,6 +3,7 @@ from contextlib import contextmanager
 import traceback
 import names
 import subprocess
+import sys
 import json
 import time
 import os
@@ -278,6 +279,16 @@ class VillagerBench:
         Agent.launch(host=self.host, port=self.port, debug=debug, fast=fast_api)
         self.running = True
         self.reset()
+        self.wait_for_agents_ready()
+
+    def wait_for_agents_ready(self, timeout: int = 120):
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            if self.agents_ping()["status"]:
+                self.logger.info("all agent servers are ready")
+                return
+            time.sleep(1)
+        raise TimeoutError("agent servers failed to become ready")
 
     def reset(self):
         if self._virtual_debug:
@@ -294,25 +305,25 @@ class VillagerBench:
         
         elif self.env_type == env_type.construction:
             if self.dig_needed:
-                subprocess.Popen(["python", "env/build_judger.py", "--idx", str(self.task_id), "--host", self.host, "--port" , str(self.port), "--agent_num", str(len(self.agent_pool)), "--dig_needed","true", "--agent_names", agent_names_str, "--task_name", self.task_name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.Popen([sys.executable, "env/build_judger.py", "--idx", str(self.task_id), "--host", self.host, "--port" , str(self.port), "--agent_num", str(len(self.agent_pool)), "--dig_needed","true", "--agent_names", agent_names_str, "--task_name", self.task_name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 self.logger.debug(f"python env/build_judger.py --idx {self.task_id} --host {self.host} --port {self.port} --dig_needed true --agent_num {len(self.agent_pool)} --agent_names {agent_names_str} --task_name {self.task_name}")
             else:
-                subprocess.Popen(["python", "env/build_judger.py", "--idx", str(self.task_id), "--host", self.host, "--port" , str(self.port), "--agent_num", str(len(self.agent_pool)), "--agent_names", agent_names_str, "--task_name", self.task_name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.Popen([sys.executable, "env/build_judger.py", "--idx", str(self.task_id), "--host", self.host, "--port" , str(self.port), "--agent_num", str(len(self.agent_pool)), "--agent_names", agent_names_str, "--task_name", self.task_name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 self.logger.debug(f"python env/build_judger.py --idx {self.task_id} --host {self.host} --port {self.port} --agent_num {len(self.agent_pool)} --agent_names {agent_names_str} --task_name {self.task_name}")
         elif self.env_type == env_type.farming:
-            subprocess.Popen(["python", "env/farm_craft_judger.py", "--idx", str(self.task_id), "--host", self.host, "--port" , str(self.port), "--agent_num", str(len(self.agent_pool)), "--agent_names", agent_names_str, "--task_name", self.task_name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.Popen([sys.executable, "env/farm_craft_judger.py", "--idx", str(self.task_id), "--host", self.host, "--port" , str(self.port), "--agent_num", str(len(self.agent_pool)), "--agent_names", agent_names_str, "--task_name", self.task_name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             self.logger.debug(f"python env/farm_craft_judger.py --idx {self.task_id} --host {self.host} --port {self.port} --agent_num {len(self.agent_pool)} --agent_names {agent_names_str} --task_name {self.task_name}")
         elif self.env_type == env_type.puzzle:
-            subprocess.Popen(["python", "env/escape_room_judger.py", "--idx", str(self.task_id), "--host", self.host, "--port" , str(self.port), "--max_task_num", str(self.max_task_num), "--agent_num", str(len(self.agent_pool)), "--agent_names", agent_names_str, "--task_name", self.task_name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.Popen([sys.executable, "env/escape_room_judger.py", "--idx", str(self.task_id), "--host", self.host, "--port" , str(self.port), "--max_task_num", str(self.max_task_num), "--agent_num", str(len(self.agent_pool)), "--agent_names", agent_names_str, "--task_name", self.task_name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             self.logger.debug(f"python env/escape_room_judger.py --idx {self.task_id} --host {self.host} --port {self.port} --max_task_num {self.max_task_num} --agent_num {len(self.agent_pool)} --agent_names {agent_names_str} --task_name {self.task_name}")
         elif self.env_type == env_type.auto:
-            subprocess.Popen(["python", "env/auto_judger.py", "--idx", str(self.task_id), "--host", self.host, "--port" , str(self.port), "--agent_num", str(len(self.agent_pool)), "--agent_names", agent_names_str, "--task_name", self.task_name, "--op_path", self.op_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.Popen([sys.executable, "env/auto_judger.py", "--idx", str(self.task_id), "--host", self.host, "--port" , str(self.port), "--agent_num", str(len(self.agent_pool)), "--agent_names", agent_names_str, "--task_name", self.task_name, "--op_path", self.op_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             self.logger.debug(f"python env/auto_judger.py --idx {self.task_id} --host {self.host} --port {self.port} --agent_num {len(self.agent_pool)} --agent_names {agent_names_str} --task_name {self.task_name} --op_path {self.op_path}")
         elif self.env_type == env_type.meta:
-            subprocess.Popen(["python", "env/meta_judger.py", "--idx", str(self.task_id), "--host", self.host, "--port" , str(self.port), "--agent_num", str(len(self.agent_pool)), "--agent_names", agent_names_str, "--task_name", self.task_name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.Popen([sys.executable, "env/meta_judger.py", "--idx", str(self.task_id), "--host", self.host, "--port" , str(self.port), "--agent_num", str(len(self.agent_pool)), "--agent_names", agent_names_str, "--task_name", self.task_name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             self.logger.debug(f"python env/meta_judger.py --idx {self.task_id} --host {self.host} --port {self.port} --agent_num {len(self.agent_pool)} --agent_names {agent_names_str} --task_name {self.task_name}")
         elif self.env_type == env_type.gen:
-            subprocess.Popen(["python", "env/llm_gen_judger.py", "--host", self.host, "--port" , str(self.port), "--agent_num", str(len(self.agent_pool)), "--agent_names", agent_names_str, "--task_name", self.task_name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.Popen([sys.executable, "env/llm_gen_judger.py", "--host", self.host, "--port" , str(self.port), "--agent_num", str(len(self.agent_pool)), "--agent_names", agent_names_str, "--task_name", self.task_name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             self.logger.debug(f"python env/llm_gen_judger.py --host {self.host} --port {self.port} --agent_num {len(self.agent_pool)} --agent_names {agent_names_str} --task_name {self.task_name}")
         elif self.env_type == env_type.none:
             self.logger.info("no env type specified, only agent will be launched")

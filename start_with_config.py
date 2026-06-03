@@ -1,4 +1,5 @@
 import multiprocessing
+import argparse
 import os
 import shutil
 import random
@@ -20,13 +21,43 @@ start_time = time.time()
 os.environ["NO_PROXY"] = "localhost,127.0.0.1,::1"
 os.environ["no_proxy"] = "localhost,127.0.0.1,::1"
 
-def run(api_model: str, api_base: str, task_type: str, task_idx: int, agent_num: int, dig_needed: bool, max_task_num: int, task_goal: str, document_file: str, host: str, port: int, task_name: str, role: str = "same", api_key_list: list = [], document: dict = {}):
+def load_api_key_list(api_model: str) -> list:
+    with open("API_KEY_LIST", "r") as f:
+        key_map = json.load(f)
+
+    model = api_model.lower()
+    if "gemini" in model:
+        candidates = ["GEMINI", "AGENT_KEY", "OPENAI"]
+    elif "glm" in model:
+        candidates = ["GLM", "ZHIPU", "AGENT_KEY", "OPENAI"]
+    elif "qwen" in model:
+        candidates = ["DASHSCOPE", "QWEN", "AGENT_KEY", "OPENAI"]
+    else:
+        candidates = ["AGENT_KEY", "OPENAI"]
+
+    for key in candidates:
+        values = key_map.get(key)
+        if values:
+            return values
+    raise KeyError(f"No API key list found for model {api_model}; checked {candidates}")
+
+
+def move_if_exists(src: str, dst: str):
+    if os.path.exists(src) and not os.path.exists(dst):
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        shutil.move(src, dst)
+
+
+def run(api_model: str, api_base: str, task_type: str, task_idx: int, agent_num: int, dig_needed: bool, max_task_num: int, task_goal: str, document_file: str, host: str, port: int, task_name: str, role: str = "same", api_key_list: list = None, document: dict = None):
     start_time = time.time()
 
-    api_key_list = json.load(open("API_KEY_LIST", "r"))["AGENT_KEY"]
+    if api_key_list is None:
+        api_key_list = load_api_key_list(api_model)
+    if document is None:
+        document = {}
 
-    Agent.base_url = "https://api.openai.com/v1"
-    Agent.model = "gpt-4o"
+    Agent.base_url = api_base
+    Agent.model = api_model
     Agent.api_key_list = api_key_list
 
     # 设置env
@@ -108,8 +139,8 @@ def run(api_model: str, api_base: str, task_type: str, task_idx: int, agent_num:
         # 设置llm
         llm_config = {
             "api_key": api_key_list[0],
-            "api_base": "https://api.openai.com/v1",
-            "api_model": "gpt-4o",
+            "api_base": api_base,
+            "api_model": api_model,
             "api_key_list": api_key_list
         }
 
@@ -153,9 +184,11 @@ def run(api_model: str, api_base: str, task_type: str, task_idx: int, agent_num:
 
 
 if __name__ == "__main__":
-    # with open("qwen3_235b_a22b_launch_config_farming.json", "r") as f:
-    # with open("/home/yubo/VillagerAgent-Minecraft-multiagent-framework/test_config.json", "r") as f:
-    with open("gpt_4o_launch_config_meta.json", "r") as f:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", default="gpt_4o_launch_config_meta.json", help="launch config json file")
+    args = parser.parse_args()
+
+    with open(args.config, "r") as f:
         launch_config = json.load(f)
     # shuffle 
     # launch_config = random.sample(launch_config, len(launch_config))
@@ -175,13 +208,14 @@ if __name__ == "__main__":
         if os.path.exists(".cache/heart_beat.cache"):
             os.remove(".cache/heart_beat.cache")
 
-
-        api_key_list = json.load(open("API_KEY_LIST", "r"))["AGENT_KEY"]
+        api_model = config.get("api_model", "gpt-4o")
+        api_base = config.get("api_base", "https://api.openai.com/v1")
+        api_key_list = load_api_key_list(api_model)
 
         llm_config = {
             "api_key": api_key_list[0],
-            "api_base": "https://api.openai.com/v1",
-            "api_model": "gpt-4o",
+            "api_base": api_base,
+            "api_model": api_model,
             "api_key_list": api_key_list
         }
         
@@ -199,7 +233,7 @@ if __name__ == "__main__":
                                                 config["port"],
                                                 config["task_name"],
                                                 config.get("role", "same"),
-                                                [llm_config["api_key_list"]],
+                                                llm_config["api_key_list"],
                                                 config.get("evaluation_arg", {})
                                             )
                                           )
@@ -216,10 +250,14 @@ if __name__ == "__main__":
                     for child in parent.children(recursive=True):
                         child.kill()
                     parent.kill()
-                    shutil.move("data/action_log.json",
-                                os.path.join(os.path.join("result", config["task_name"]), "action_log.json"))
-                    shutil.move("data/tokens.json",
-                                os.path.join(os.path.join("result", config["task_name"]), "tokens.json"))
+                    result_dir = os.path.join("result", config["task_name"])
+                    os.makedirs(result_dir, exist_ok=True)
+                    with open(os.path.join(result_dir, "config.json"), "w") as f:
+                        json.dump(config, f, indent=4)
+                    move_if_exists("data/action_log.json",
+                                   os.path.join(result_dir, "action_log.json"))
+                    move_if_exists("data/tokens.json",
+                                   os.path.join(result_dir, "tokens.json"))
                     break
                 if os.path.exists(".cache/heart_beat.cache"):
                     with open(".cache/heart_beat.cache", "r") as f:

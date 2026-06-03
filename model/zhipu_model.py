@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 class ZhipuLanguageModel(AbstractLanguageModel):
-    _supported_models = ["glm-4", "glm-3-turbo"]
+    _supported_models = ["glm-4", "glm-3-turbo", "glm-4.5", "glm-4.5-air", "glm-4.6", "glm-4.7", "glm-5", "glm-5-turbo", "glm-5.1"]
     def __init__(self, api_key="", api_model="glm-4", role_name="", api_key_list=[]):
         if api_key == "":
             self.api_key = os.environ.get("ZHIPU_API_KEY")

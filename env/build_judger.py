@@ -42,6 +42,10 @@ bot = mineflayer.createBot({
     'auth': 'offline',
     'version': "1.19.2",
 })
+# NOTE: Do NOT install_chat_throttle here — the Python sleep()
+# wrapper causes the JS↔Python bridge to time out on bot.chat() calls.
+# Instead, the judger's own time.sleep() calls between commands pace the
+# Minecraft server adequately.
 
 ### reset the environments
 last_time = time.time()
@@ -226,15 +230,23 @@ def handleViewer(*args):
         task_data = data.copy()
 
         bot.chat(f'/setblock -4 {y_b} 0 chest[facing=west]')
+        time.sleep(0.15)
         # set small house
         bot.chat(f'/setblock -4 {y_b} -1 minecraft:crafting_table')
+        time.sleep(0.15)
         bot.chat(f'/setblock -4 {y_b} 1 minecraft:furnace[facing=west]')
+        time.sleep(0.15)
         bot.chat(f'/setblock -4 {y_b} -2 minecraft:spruce_planks')
+        time.sleep(0.15)
         bot.chat(f'/setblock -4 {y_b} 2 minecraft:spruce_planks')
+        time.sleep(0.15)
         bot.chat(f'/fill -3 {y_b} -3 -3 {y_b + 1} 3 minecraft:spruce_planks')
+        time.sleep(0.15)
         # set fence
         bot.chat(f'/setblock -4 {y_b} -3 minecraft:spruce_fence')
+        time.sleep(0.15)
         bot.chat(f'/setblock -4 {y_b} 3 minecraft:spruce_fence')
+        time.sleep(0.15)
 
         blocks_list = []
         for b in task_data["blocks"]:
@@ -498,7 +510,9 @@ def handleViewer(*args):
     bot.chat(f'/tp @s -5 {y_b} 0')
     time.sleep(.1)
     bot.chat(f'/tp @e[type=player,gamemode=survival] @s')
+    time.sleep(.15)
     bot.chat(f'/clear @e[type=player,gamemode=survival]')
+    time.sleep(.15)
     bot.chat('/time set day')
     time.sleep(.1)
     bot.chat('/weather clear')
@@ -508,7 +522,9 @@ def handleViewer(*args):
     bot.chat('/gamemode spectator')
     time.sleep(.1)
     bot.chat('/kill @e[type=!minecraft:player]')
+    time.sleep(.15)
     bot.chat('/kill @e[type=!minecraft:player]')
+    time.sleep(.15)
 
     for y in range(y_b + 20, y_b - 1, -1):
         bot.chat(f"/fill 0 {y} -40 40 {y} 40 minecraft:air")

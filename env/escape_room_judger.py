@@ -49,6 +49,7 @@ bot = mineflayer.createBot({
     'auth': 'offline',
     'version': "1.19.2",
 })
+# NOTE: No throttle — Python sleep() wrapper causes JS bridge timeout.
 bot.loadPlugin(pathfinder.pathfinder)
 bot.loadPlugin(collectBlock.plugin)
 bot.loadPlugin(pvp)

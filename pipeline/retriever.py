@@ -1,4 +1,3 @@
-from langchain.embeddings.openai import OpenAIEmbeddings
 import numpy as np
 import time
 from typing import List, Dict, Tuple, Union
@@ -16,9 +15,16 @@ class Retriever:
     '''
     This class is the retriever for the pipeline, it is used to retrieve the most similar data from the given data.
     '''
-    embeddings = OpenAIEmbeddings(model="text-embedding-ada-002")
+    embeddings = None
     def __init__(self):
         self.embedding_map = {}
+
+    @classmethod
+    def get_embeddings(cls):
+        if cls.embeddings is None:
+            from langchain.embeddings.openai import OpenAIEmbeddings
+            cls.embeddings = OpenAIEmbeddings(model="text-embedding-ada-002")
+        return cls.embeddings
 
     def string_similar(self, s1, s2):
         return difflib.SequenceMatcher(None, s1, s2).quick_ratio()
@@ -33,7 +39,7 @@ class Retriever:
             for q in query:
                 emb_need += self.get_flatten_emb(q, data)
                 emb_need += self.get_key_value_emb(q, data)
-        embeddings = self.embeddings
+        embeddings = self.get_embeddings()
 
         def process_emb(emb):
             if emb not in self.embedding_map:
@@ -44,7 +50,7 @@ class Retriever:
 
     
     def similarity_get(self, text1, text2, embedding1=None, embedding2=None):
-        embeddings = self.embeddings
+        embeddings = self.get_embeddings()
         # print(f"Query: {text1}", f"Document: {text2}", sep="\n")
         start_time = time.time()
         if embedding1 is None:
@@ -118,7 +124,7 @@ class Retriever:
     def find_most_similar_key(self, query, data, threshold, max_results):
         results = []
         embedding_map = self.embedding_map
-        embeddings = self.embeddings
+        embeddings = self.get_embeddings()
         def search(x):
             if isinstance(x, dict):
                 for key, value in x.items():
@@ -181,7 +187,7 @@ class Retriever:
         return out
 
     def flatten_search(self, query, data, threshold, max_results):
-        embeddings = self.embeddings
+        embeddings = self.get_embeddings()
         embedding_map = self.embedding_map
         data_dict = self.flatten_json(data)
         results = []
