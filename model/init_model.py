@@ -1,13 +1,16 @@
 def init_language_model(args: dict):
     api_model = args.get("api_model", "")
+    api_base = args.get("api_base", "")
 
-    if "gpt" in api_model and 'llama' not in api_model or "qwen" in api_model or "deepseek" in api_model or "default" in api_model:
+    from model.utils import is_openai_compatible_api
+
+    if is_openai_compatible_api(api_model, api_base):
         from model.openai_models import OpenAILanguageModel
 
         new_args = {
             "api_key": args.get("api_key", None),
             "api_model": api_model,
-            "api_base": args.get("api_base", None),
+            "api_base": api_base,
             "evaluation_strategy": args.get("evaluation_strategy", None),
             "enable_ReAct_prompting": args.get("enable_ReAct_prompting", None),
             "strategy": args.get("strategy", None),
@@ -33,6 +36,7 @@ def init_language_model(args: dict):
         new_args = {
             "api_key": args.get("api_key", None),
             "api_model": api_model,
+            "api_base": api_base,
             "role_name": args.get("role_name", None),
             "api_key_list": args.get("api_key_list", None)
         }

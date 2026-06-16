@@ -2,9 +2,12 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import os
 from functools import partial
 from importlib.metadata import version
+import time
 from typing import (
     Any,
     Callable,
@@ -17,6 +20,8 @@ from typing import (
     Type,
     Union,
 )
+import urllib.error
+import urllib.request
 
 from langchain_core.callbacks import (
     AsyncCallbackManagerForLLMRun,
@@ -48,6 +53,11 @@ from langchain_core.outputs import (
 )
 from langchain_core.pydantic_v1 import BaseModel, Field
 from packaging.version import parse
+from model.zhipu_model import (
+    GLM_ANTHROPIC_VERSION,
+    GLM_MIN_MAX_TOKENS,
+    normalize_glm_anthropic_base_url,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -64,18 +74,10 @@ def _create_retry_decorator(
         Union[AsyncCallbackManagerForLLMRun, CallbackManagerForLLMRun]
     ] = None,
 ) -> Callable[[Any], Any]:
-    import zhipuai
-
     errors = [
-        zhipuai.ZhipuAIError,
-        zhipuai.APIStatusError,
-        zhipuai.APIRequestFailedError,
-        zhipuai.APIReachLimitError,
-        zhipuai.APIInternalError,
-        zhipuai.APIServerFlowExceedError,
-        zhipuai.APIResponseError,
-        zhipuai.APIResponseValidationError,
-        zhipuai.APITimeoutError,
+        urllib.error.URLError,
+        TimeoutError,
+        RuntimeError,
     ]
     return create_base_retry_decorator(
         error_types=errors, max_retries=llm.max_retries, run_manager=run_manager
@@ -195,7 +197,13 @@ class ChatZhipuAI(BaseChatModel):
 
     zhipuai: Any
     zhipuai_api_key: Optional[str] = Field(default=None, alias="api_key")
-    """Automatically inferred from env var `ZHIPUAI_API_KEY` if not provided."""
+    """Automatically inferred from GLM/Zhipu env vars if not provided."""
+
+    base_url: Optional[str] = None
+    """Anthropic-compatible GLM API root. Defaults to z.ai's plan-covered path."""
+
+    anthropic_version: str = GLM_ANTHROPIC_VERSION
+    """Anthropic Messages API version accepted by z.ai's compatibility layer."""
 
     client: Any = Field(default=None, exclude=True)  #: :meta private:
 
@@ -264,11 +272,11 @@ class ChatZhipuAI(BaseChatModel):
     @property
     def _llm_type(self) -> str:
         """Return the type of chat model."""
-        return "zhipuai"
+        return "glm_anthropic"
 
     @property
     def lc_secrets(self) -> Dict[str, str]:
-        return {"zhipuai_api_key": "ZHIPUAI_API_KEY"}
+        return {"zhipuai_api_key": "GLM_API_KEY"}
 
     @classmethod
     def get_lc_namespace(cls) -> List[str]:
@@ -298,7 +306,6 @@ class ChatZhipuAI(BaseChatModel):
             "stream": self.streaming,
             "temperature": self.temperature,
             "top_p": self.top_p,
-            "do_sample": self.do_sample,
             **self.model_kwargs,
         }
         if self.max_tokens is not None:
@@ -315,30 +322,133 @@ class ChatZhipuAI(BaseChatModel):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        if not self.zhipuai_api_key:
+            self.zhipuai_api_key = (
+                os.getenv("GLM_API_KEY")
+                or os.getenv("ZAI_API_KEY")
+                or os.getenv("ZHIPU_API_KEY")
+                or os.getenv("ZHIPUAI_API_KEY")
+            )
+        if not self.zhipuai_api_key:
+            raise RuntimeError("Please provide a GLM API key via GLM_API_KEY or API_KEY_LIST['GLM']")
+        self.base_url = normalize_glm_anthropic_base_url(self.base_url)
+        self.client = None
+
+    def _request_timeout(self) -> int:
         try:
-            from zhipuai import ZhipuAI
+            return int(os.getenv("GLM_API_TIMEOUT", "120"))
+        except ValueError:
+            return 120
 
-            if not is_zhipu_v2():
-                raise RuntimeError(
-                    "zhipuai package version is too low"
-                    "Please install it via 'pip install --upgrade zhipuai'"
-                )
+    def _request_max_tokens(self, max_tokens: Optional[int]) -> int:
+        try:
+            requested = int(max_tokens or 0)
+        except (TypeError, ValueError):
+            requested = 0
+        try:
+            minimum = int(os.getenv("GLM_MIN_MAX_TOKENS", str(GLM_MIN_MAX_TOKENS)))
+        except ValueError:
+            minimum = GLM_MIN_MAX_TOKENS
+        return max(requested, minimum)
 
-            self.client = ZhipuAI(
-                api_key=self.zhipuai_api_key,  # 填写您的 APIKey
-            )
-        except ImportError:
-            raise RuntimeError(
-                "Could not import zhipuai package. "
-                "Please install it via 'pip install zhipuai'"
-            )
+    def _merge_message(self, messages: List[Dict[str, Any]], role: str, content: Any) -> None:
+        if isinstance(content, list):
+            content = "\n".join(str(block.get("text", block)) for block in content)
+        content = str(content or "")
+        if messages and messages[-1]["role"] == role:
+            messages[-1]["content"] = f"{messages[-1]['content']}\n\n{content}".strip()
+            return
+        messages.append({"role": role, "content": content})
+
+    def _anthropic_body(self, **kwargs: Any) -> Dict[str, Any]:
+        message_dicts = kwargs.pop("messages", []) or []
+        system_parts: List[str] = []
+        messages: List[Dict[str, Any]] = []
+
+        for message in message_dicts:
+            role = message.get("role")
+            content = message.get("content", "")
+            if role == "system":
+                system_parts.append(str(content or ""))
+            elif role in {"user", "assistant"}:
+                self._merge_message(messages, role, content)
+            elif role == "tool":
+                self._merge_message(messages, "user", content)
+            else:
+                self._merge_message(messages, "user", content)
+
+        if not messages or messages[0]["role"] != "user":
+            messages.insert(0, {"role": "user", "content": "Continue."})
+
+        body: Dict[str, Any] = {
+            "model": kwargs.get("model", self.model_name),
+            "max_tokens": self._request_max_tokens(kwargs.get("max_tokens", self.max_tokens)),
+            "messages": messages,
+        }
+        if system_parts:
+            body["system"] = "\n\n".join(system_parts)
+        if kwargs.get("temperature") is not None:
+            body["temperature"] = kwargs["temperature"]
+        if kwargs.get("top_p") is not None:
+            body["top_p"] = kwargs["top_p"]
+        if kwargs.get("stop") is not None:
+            stop = kwargs["stop"]
+            body["stop_sequences"] = stop if isinstance(stop, list) else [stop]
+        return body
+
+    def _post_anthropic(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        request = urllib.request.Request(
+            f"{self.base_url}/v1/messages",
+            data=json.dumps(body).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {self.zhipuai_api_key}",
+                "anthropic-version": self.anthropic_version,
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=self._request_timeout()) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode("utf-8", "replace")
+            raise RuntimeError(f"GLM Anthropic API error {e.code}: {detail[:1000]}") from e
+
+    def _to_openai_shape(self, response: Dict[str, Any]) -> Dict[str, Any]:
+        content_blocks = response.get("content", [])
+        if isinstance(content_blocks, str):
+            text = content_blocks
+        else:
+            text = "\n".join(
+                block.get("text", "")
+                for block in content_blocks
+                if isinstance(block, dict) and block.get("type") == "text"
+            ).strip()
+        usage = response.get("usage") or {}
+        return {
+            "id": response.get("id", ""),
+            "created": int(time.time()),
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {"role": "assistant", "content": text},
+                    "finish_reason": response.get("stop_reason"),
+                }
+            ],
+            "usage": {
+                "prompt_tokens": usage.get("input_tokens", 0),
+                "completion_tokens": usage.get("output_tokens", 0),
+                "total_tokens": usage.get("input_tokens", 0) + usage.get("output_tokens", 0),
+            },
+        }
 
     def completions(self, **kwargs) -> Any | None:
-        return self.client.chat.completions.create(**kwargs)
+        body = self._anthropic_body(**kwargs)
+        return self._to_openai_shape(self._post_anthropic(body))
 
     async def async_completions(self, **kwargs) -> Any:
         loop = asyncio.get_running_loop()
-        partial_func = partial(self.client.chat.completions.create, **kwargs)
+        partial_func = partial(self.completions, **kwargs)
         response = await loop.run_in_executor(
             None,
             partial_func,
@@ -346,13 +456,7 @@ class ChatZhipuAI(BaseChatModel):
         return response
 
     async def async_completions_result(self, task_id):
-        loop = asyncio.get_running_loop()
-        response = await loop.run_in_executor(
-            None,
-            self.client.asyncCompletions.retrieve_completion_result,
-            task_id,
-        )
-        return response
+        raise NotImplementedError("GLM Anthropic-compatible async task retrieval is not supported")
 
     def _create_chat_result(self, response: Union[dict, BaseModel]) -> ChatResult:
         generations = []

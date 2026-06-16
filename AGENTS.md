@@ -57,10 +57,22 @@ Create `API_KEY_LIST` in the repo root. It is ignored by git and should not be c
 {
   "AGENT_KEY": ["..."],
   "OPENAI": ["..."],
+  "RCAC": ["..."],
   "GEMINI": ["..."],
   "GLM": ["..."]
 }
 ```
+
+For Purdue RCAC GenAI Studio, put the generated key in the repo-root `API_KEY_LIST` under `"RCAC"` and configure OpenAI-compatible callers with:
+
+```json
+{
+  "api_model": "llama3.1:latest",
+  "api_base": "https://genai.rcac.purdue.edu/api"
+}
+```
+
+The full Purdue endpoint is `/api/chat/completions`; SDK clients in this repo should be given the API root above. The code normalizes the full endpoint if it is supplied accidentally.
 
 Many scripts read `API_KEY_LIST` at import or startup, including `config.py`, `start_with_config.py`, `pipeline/retriever.py`, and demo scripts. Without it, even harmless imports may fail.
 

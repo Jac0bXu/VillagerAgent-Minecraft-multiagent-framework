@@ -284,11 +284,21 @@ class VillagerBench:
     def wait_for_agents_ready(self, timeout: int = 120):
         start_time = time.time()
         while time.time() - start_time < timeout:
-            if self.agents_ping()["status"]:
+            if self.agents_ping()["status"] and self.agents_environment_ready():
                 self.logger.info("all agent servers are ready")
                 return
             time.sleep(1)
         raise TimeoutError("agent servers failed to become ready")
+
+    def agents_environment_ready(self):
+        try:
+            for agent in self.agent_pool:
+                status = Agent.get_environment_info_dict(agent.name)
+                if not status or not status.get("status"):
+                    return False
+        except Exception:
+            return False
+        return True
 
     def reset(self):
         if self._virtual_debug:

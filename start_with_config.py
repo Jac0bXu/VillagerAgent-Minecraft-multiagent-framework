@@ -8,6 +8,7 @@ import psutil
 import time
 from env.env import VillagerBench, env_type, Agent
 from model.init_model import init_language_model
+from model.utils import is_rcac_api_base, normalize_openai_api_base
 
 start_time = time.time()
 from pipeline.controller_tiny import GlobalController
@@ -21,15 +22,17 @@ start_time = time.time()
 os.environ["NO_PROXY"] = "localhost,127.0.0.1,::1"
 os.environ["no_proxy"] = "localhost,127.0.0.1,::1"
 
-def load_api_key_list(api_model: str) -> list:
+def load_api_key_list(api_model: str, api_base: str = "") -> list:
     with open("API_KEY_LIST", "r") as f:
         key_map = json.load(f)
 
-    model = api_model.lower()
-    if "gemini" in model:
+    model = str(api_model or "").lower()
+    if is_rcac_api_base(api_base) or "rcac" in model or "purdue" in model:
+        candidates = ["RCAC", "PURDUE_RCAC", "GENAI_STUDIO", "AGENT_KEY", "OPENAI"]
+    elif "gemini" in model:
         candidates = ["GEMINI", "AGENT_KEY", "OPENAI"]
     elif "glm" in model:
-        candidates = ["GLM", "ZHIPU", "AGENT_KEY", "OPENAI"]
+        candidates = ["GLM", "ZAI", "ZHIPU", "AGENT_KEY", "OPENAI"]
     elif "qwen" in model:
         candidates = ["DASHSCOPE", "QWEN", "AGENT_KEY", "OPENAI"]
     else:
@@ -52,10 +55,12 @@ def run(api_model: str, api_base: str, task_type: str, task_idx: int, agent_num:
     start_time = time.time()
 
     if api_key_list is None:
-        api_key_list = load_api_key_list(api_model)
+        api_base = normalize_openai_api_base(api_base)
+        api_key_list = load_api_key_list(api_model, api_base)
     if document is None:
         document = {}
 
+    api_base = normalize_openai_api_base(api_base)
     Agent.base_url = api_base
     Agent.model = api_model
     Agent.api_key_list = api_key_list
@@ -190,11 +195,13 @@ if __name__ == "__main__":
 
     with open(args.config, "r") as f:
         launch_config = json.load(f)
+    heartbeat_timeout_sec = float(os.getenv("VILLAGER_HEARTBEAT_TIMEOUT_SEC", "3600"))
     # shuffle 
     # launch_config = random.sample(launch_config, len(launch_config))
     for i, config in enumerate(launch_config):
 
-        if os.path.exists(f"result/{config['task_name']}"):
+        score_path = os.path.join("result", config["task_name"], "score.json")
+        if os.path.exists(score_path):
             print(f"task {config['task_name']} exists")
             continue
         print(f"task {i+1}/{len(launch_config)} start")
@@ -209,8 +216,8 @@ if __name__ == "__main__":
             os.remove(".cache/heart_beat.cache")
 
         api_model = config.get("api_model", "gpt-4o")
-        api_base = config.get("api_base", "https://api.openai.com/v1")
-        api_key_list = load_api_key_list(api_model)
+        api_base = normalize_openai_api_base(config.get("api_base", "https://api.openai.com/v1"))
+        api_key_list = load_api_key_list(api_model, api_base)
 
         llm_config = {
             "api_key": api_key_list[0],
@@ -262,7 +269,7 @@ if __name__ == "__main__":
                 if os.path.exists(".cache/heart_beat.cache"):
                     with open(".cache/heart_beat.cache", "r") as f:
                         env_time = json.load(f)["time"]
-                        if time.time() - env_time > 10:
+                        if time.time() - env_time > heartbeat_timeout_sec:
                             print("env error")
                             # pipeline test log save
                             if os.path.exists(".cache"):

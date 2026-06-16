@@ -3,8 +3,9 @@ import logging
 import os
 import time
 import random
+import urllib.error
+import urllib.request
 from retry import retry
-from zhipuai import ZhipuAI
 
 from model.abstract_language_model import AbstractLanguageModel
 from model.utils import extract_info
@@ -14,21 +15,78 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+DEFAULT_GLM_ANTHROPIC_BASE_URL = "https://api.z.ai/api/anthropic"
+GLM_ANTHROPIC_VERSION = "2023-06-01"
+GLM_MIN_MAX_TOKENS = 1024
+
+
+def normalize_glm_anthropic_base_url(api_base: str = "") -> str:
+    """Return the Anthropic-compatible GLM API root.
+
+    GLM's OpenAI-compatible /api/paas/v4 path can require prepaid balance for
+    premium models. The Anthropic-compatible path is covered by the GLM Coding
+    Plan, so route GLM calls there by default.
+    """
+    base = str(api_base or os.getenv("GLM_API_BASE") or "").strip().rstrip("/")
+    if not base:
+        return DEFAULT_GLM_ANTHROPIC_BASE_URL
+
+    lower = base.lower()
+    if (
+        "api.openai.com" in lower
+        or "api.chatanywhere.tech" in lower
+        or "open.bigmodel.cn/api/paas" in lower
+    ):
+        return DEFAULT_GLM_ANTHROPIC_BASE_URL
+    if lower.endswith("/v1/messages"):
+        return base[: -len("/v1/messages")]
+    if lower.endswith("/v1"):
+        return base[: -len("/v1")]
+    return base
+
+
+def first_env_key(names):
+    for name in names:
+        value = os.environ.get(name)
+        if value:
+            return value
+    return None
+
 
 class ZhipuLanguageModel(AbstractLanguageModel):
-    _supported_models = ["glm-4", "glm-3-turbo", "glm-4.5", "glm-4.5-air", "glm-4.6", "glm-4.7", "glm-5", "glm-5-turbo", "glm-5.1"]
-    def __init__(self, api_key="", api_model="glm-4", role_name="", api_key_list=[]):
-        if api_key == "":
-            self.api_key = os.environ.get("ZHIPU_API_KEY")
-        else:
-            self.api_key = api_key
+    _supported_models = [
+        "glm-4",
+        "glm-3-turbo",
+        "glm-4.5",
+        "glm-4.5-air",
+        "glm-4.5-flash",
+        "glm-4.6",
+        "glm-4.7",
+        "glm-5",
+        "glm-5-turbo",
+        "glm-5.1",
+    ]
+
+    def __init__(self, api_key="", api_model="glm-4.5", role_name="", api_key_list=[], api_base=""):
+        keys = []
+        if api_key:
+            keys.append(api_key)
+        keys.extend([key for key in (api_key_list or []) if key])
+
+        env_key = first_env_key(["GLM_API_KEY", "ZAI_API_KEY", "ZHIPU_API_KEY", "ZHIPUAI_API_KEY"])
+        if env_key:
+            keys.append(env_key)
+
+        self.api_key_list = list(dict.fromkeys(keys))
+        if not self.api_key_list:
+            raise Exception("Please provide a GLM API key via API_KEY_LIST['GLM'] or GLM_API_KEY")
+        self.api_key = self.api_key_list[0]
+        self.api_base = normalize_glm_anthropic_base_url(api_base)
 
         if api_model in ZhipuLanguageModel._supported_models:
             self.api_model = api_model
         else:
             raise Exception(f"only support {ZhipuLanguageModel._supported_models}, but got {api_model}")
-
-        self.api_key_list = api_key_list
 
         self.role_name = role_name
 
@@ -90,12 +148,84 @@ class ZhipuLanguageModel(AbstractLanguageModel):
     def evaluate_states(self, states):
         pass
 
+    def _request_timeout(self):
+        try:
+            return int(os.getenv("GLM_API_TIMEOUT", "120"))
+        except ValueError:
+            return 120
+
+    def _request_max_tokens(self, max_tokens):
+        try:
+            requested = int(max_tokens or 0)
+        except (TypeError, ValueError):
+            requested = 0
+        try:
+            minimum = int(os.getenv("GLM_MIN_MAX_TOKENS", str(GLM_MIN_MAX_TOKENS)))
+        except ValueError:
+            minimum = GLM_MIN_MAX_TOKENS
+        return max(requested, minimum)
+
+    def _build_messages(self, example_prompt):
+        messages = []
+        for i, prompt in enumerate(example_prompt):
+            role = "user" if i % 2 == 0 else "assistant"
+            messages.append({"role": role, "content": str(prompt)})
+        if not messages:
+            messages.append({"role": "user", "content": "Respond to the system instructions."})
+        return messages
+
+    def _post_messages(self, body):
+        url = f"{self.api_base}/v1/messages"
+        headers = {
+            "Authorization": f"Bearer {random.choice(self.api_key_list)}",
+            "anthropic-version": GLM_ANTHROPIC_VERSION,
+            "Content-Type": "application/json",
+        }
+        request = urllib.request.Request(
+            url,
+            data=json.dumps(body).encode("utf-8"),
+            headers=headers,
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=self._request_timeout()) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode("utf-8", "replace")
+            raise RuntimeError(f"GLM Anthropic API error {e.code}: {detail[:1000]}") from e
+
+    def _extract_text(self, response):
+        content = response.get("content", "")
+        if isinstance(content, str):
+            return content
+
+        text_blocks = []
+        for block in content or []:
+            if isinstance(block, dict) and block.get("type") == "text":
+                text_blocks.append(block.get("text", ""))
+        return "\n".join(text_blocks).strip()
+
+    def _record_usage(self, usage):
+        if not usage:
+            return
+        prompt_tokens = int(usage.get("input_tokens") or usage.get("prompt_tokens") or 0)
+        completion_tokens = int(usage.get("output_tokens") or usage.get("completion_tokens") or 0)
+        with open("data/tokens.json", "r") as token_file:
+            tokens = json.load(token_file)
+
+        tokens["dates"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+        tokens["tokens_used"] = tokens.get("tokens_used", 0) + prompt_tokens + completion_tokens
+        tokens["prompt_tokens"] = tokens.get("prompt_tokens", 0) + prompt_tokens
+        tokens["completion_tokens"] = tokens.get("completion_tokens", 0) + completion_tokens
+        tokens["successful_requests"] = tokens.get("successful_requests", 0) + 1
+
+        with open("data/tokens.json", "w") as token_file:
+            json.dump(tokens, token_file)
+
     @retry(tries=5, delay=10, backoff=2, max_delay=60)
     def few_shot_generate_thoughts(self, system_prompt: str = "", example_prompt: [str] or str = [], max_tokens=2048,
                                    temperature=0.01, top_p=0.7, top_k=1, stop: [str]=None, cache_enabled=True, api_model="", check_tags=[],
                                    json_check=False):
-        assert 0.0 < temperature < 1.0, "temperature should be in (0.0, 1.0)"
-        assert 0.0 < top_p < 1.0, "top_p should be in (0.0, 1.0)"
         if api_model == "":
             api_model = self.api_model
         else:
@@ -126,37 +256,23 @@ class ZhipuLanguageModel(AbstractLanguageModel):
 
         start_time = time.time()
         try:
-            messages = [{"role": "system", "content": system_prompt}]
-            for i in range(len(example_prompt)):
-                if i % 2 == 0:
-                    messages.append({"role": "user", "content": example_prompt[i]})
-                else:
-                    messages.append({"role": "assistant", "content": example_prompt[i]})
+            body = {
+                "model": api_model,
+                "max_tokens": self._request_max_tokens(max_tokens),
+                "messages": self._build_messages(example_prompt),
+                "temperature": temperature,
+                "top_p": top_p,
+            }
+            if system_prompt:
+                body["system"] = system_prompt
+            if stop:
+                body["stop_sequences"] = stop if isinstance(stop, list) else [stop]
 
-            self.client = ZhipuAI(api_key=random.choice(self.api_key_list))
-
-            response = self.client.chat.completions.create(
-                model=api_model,
-                messages=messages,
-                temperature=temperature,
-                top_p=top_p,
-                max_tokens=max_tokens,
-                stop=stop,
-            )
-
-            content = response.choices[0].message.content
-            usage = response.usage
-            with open("data/tokens.json", "r") as token_file:
-                tokens = json.load(token_file)
-
-            tokens["dates"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-            tokens["tokens_used"] += usage.total_tokens
-            tokens["prompt_tokens"] += usage.prompt_tokens
-            tokens["completion_tokens"] += usage.completion_tokens
-            tokens["successful_requests"] += 1
-
-            with open("data/tokens.json", "w") as token_file:
-                json.dump(tokens, token_file)
+            response = self._post_messages(body)
+            content = self._extract_text(response)
+            if not content:
+                raise Exception(f"GLM returned empty content with stop_reason={response.get('stop_reason')}")
+            self._record_usage(response.get("usage"))
             
             for tag in check_tags:
                 if tag not in content:
@@ -195,5 +311,4 @@ class ZhipuLanguageModel(AbstractLanguageModel):
             logger.warning(e)
             logger.warning(e.__cause__)
             raise e
-
 

@@ -19,6 +19,7 @@ import os
 import sys
 import random
 import platform
+from model.utils import is_rcac_api_base, normalize_openai_api_base
 
 env = os.environ.copy()
 env["PYTHONIOENCODING"] = "utf-8"
@@ -42,6 +43,13 @@ def filter_emoji_from_dict(obj):
         return filter_emoji(obj)
     else:
         return obj
+
+
+def rcac_langchain_max_tokens() -> int:
+    try:
+        return int(os.getenv("VILLAGER_RCAC_LANGCHAIN_MAX_TOKENS", "4096"))
+    except ValueError:
+        return 4096
 
 
 def timeit(func):
@@ -935,24 +943,30 @@ class Agent():
     def step(self, instruction: str, actions=[], observations=[], player_name_list=[], max_try_turn=2, max_iterations=1, tools=[], recommended_actions=[]):
         # return the (action, observation), details.
         assert len(self.api_key_list) > 0, "Please set the api_key_list in Agent class."
-        if 'qwen' in self.model:
+        api_base = normalize_openai_api_base(Agent.base_url)
+        if is_rcac_api_base(api_base):
+            from langchain.chat_models import ChatOpenAI
+            self.llm = ChatOpenAI(model=self.model, temperature=0, max_tokens=rcac_langchain_max_tokens(), openai_api_key=random.choice(Agent.api_key_list), base_url=api_base)
+        elif 'qwen' in self.model:
             from langchain_community.chat_models.tongyi import ChatTongyi
-            self.llm = ChatTongyi(model=self.model, temperature=0, max_tokens=256, dashscope_api_key=random.choice(Agent.api_key_list), base_url=Agent.base_url,model_kwargs={"enable_thinking": False})
+            self.llm = ChatTongyi(model=self.model, temperature=0, max_tokens=256, dashscope_api_key=random.choice(Agent.api_key_list), base_url=api_base,model_kwargs={"enable_thinking": False})
         elif "default" in self.model:
             from langchain.llms import OpenAI
-            self.llm = OpenAI(model=self.model, temperature=0, max_tokens=256, openai_api_key=random.choice(Agent.api_key_list), base_url=Agent.base_url)
+            self.llm = OpenAI(model=self.model, temperature=0, max_tokens=256, openai_api_key=random.choice(Agent.api_key_list), base_url=api_base)
         elif "deepseek" in self.model:
             from openai import OpenAI
-            self.llm = OpenAI(model=self.model, temperature=0, max_token=256, openai_api_key=random.choice(Agent.api_key_list), base_url=Agent.base_url)
+            self.llm = OpenAI(model=self.model, temperature=0, max_token=256, openai_api_key=random.choice(Agent.api_key_list), base_url=api_base)
         elif "instruct" in self.model and "gpt" in self.model:
             from langchain.llms import OpenAI
-            self.llm = OpenAI(model=self.model, temperature=0, max_tokens=256, openai_api_key=random.choice(Agent.api_key_list), base_url=Agent.base_url)
-        elif "gpt" in self.model:
+            self.llm = OpenAI(model=self.model, temperature=0, max_tokens=256, openai_api_key=random.choice(Agent.api_key_list), base_url=api_base)
+        elif "gpt" in self.model or "NAS" in self.model or "llama" in self.model:
             from langchain.chat_models import ChatOpenAI
-            self.llm = ChatOpenAI(model=self.model, temperature=0,  max_tokens=256, openai_api_key=random.choice(Agent.api_key_list), base_url=Agent.base_url)
+            self.llm = ChatOpenAI(model=self.model, temperature=0,  max_tokens=256, openai_api_key=random.choice(Agent.api_key_list), base_url=api_base)
         elif "glm" in self.model:
             from zhipu import ChatZhipuAI
-            self.llm = ChatZhipuAI(model_name=self.model, temperature=0.01, api_key=random.choice(Agent.api_key_list))
+            self.llm = ChatZhipuAI(model_name=self.model, temperature=0.01, api_key=random.choice(Agent.api_key_list), base_url=api_base)
+        else:
+            raise NotImplementedError(f"Model {self.model} not implemented.")
         # elif "default" in self.model:
         #     from openai import OpenAI
         #     self.llm = OpenAI(model=self.model, openai_api_key=random.choice(Agent.api_key_list), base_url=Agent.base_url, model_kwargs={"encoding": "utf-8"})
@@ -1036,27 +1050,31 @@ class Agent():
         assert len(self.api_key_list) > 0, "Please set the api_key_list in Agent class."
         # dynamic api key
 
-        if 'qwen' in self.model:
+        api_base = normalize_openai_api_base(Agent.base_url)
+        if is_rcac_api_base(api_base):
+            from langchain.chat_models import ChatOpenAI
+            self.llm = ChatOpenAI(model=self.model, temperature=0,  max_tokens=rcac_langchain_max_tokens(), openai_api_key=random.choice(Agent.api_key_list), base_url=api_base)
+        elif 'qwen' in self.model:
             from langchain_community.chat_models.tongyi import ChatTongyi
-            self.llm = ChatTongyi(model=self.model, temperature=0, max_tokens=256, dashscope_api_key=random.choice(Agent.api_key_list), base_url=Agent.base_url,model_kwargs={"enable_thinking": False})
+            self.llm = ChatTongyi(model=self.model, temperature=0, max_tokens=256, dashscope_api_key=random.choice(Agent.api_key_list), base_url=api_base,model_kwargs={"enable_thinking": False})
         elif "default" in self.model:
             from langchain.llms import OpenAI
-            self.llm = OpenAI(model=self.model, temperature=0, max_tokens=256, openai_api_key=random.choice(Agent.api_key_list), base_url=Agent.base_url)
+            self.llm = OpenAI(model=self.model, temperature=0, max_tokens=256, openai_api_key=random.choice(Agent.api_key_list), base_url=api_base)
         elif ("instruct" in self.model and "gpt" in self.model):
             from langchain.llms import OpenAI
-            self.llm = OpenAI(model=self.model, temperature=0, max_tokens=256, openai_api_key=random.choice(Agent.api_key_list), base_url=Agent.base_url)
+            self.llm = OpenAI(model=self.model, temperature=0, max_tokens=256, openai_api_key=random.choice(Agent.api_key_list), base_url=api_base)
         elif "gpt" in self.model or "NAS" in self.model or "llama" in self.model:
             from langchain.chat_models import ChatOpenAI
-            self.llm = ChatOpenAI(model=self.model, temperature=0,  max_tokens=256, openai_api_key=random.choice(Agent.api_key_list), base_url=Agent.base_url)
+            self.llm = ChatOpenAI(model=self.model, temperature=0,  max_tokens=256, openai_api_key=random.choice(Agent.api_key_list), base_url=api_base)
         elif "gemini" in self.model:
             from langchain_google_genai import ChatGoogleGenerativeAI
             self.llm = ChatGoogleGenerativeAI(model=self.model, temperature=0, google_api_key=random.choice(Agent.api_key_list))
         elif "glm" in self.model:
             from zhipu import ChatZhipuAI
-            self.llm = ChatZhipuAI(model_name=self.model, temperature=0.01, api_key=random.choice(Agent.api_key_list))
+            self.llm = ChatZhipuAI(model_name=self.model, temperature=0.01, api_key=random.choice(Agent.api_key_list), base_url=api_base)
         elif "deepseek" in self.model:
             from langchain.chat_models import ChatOpenAI
-            self.llm = ChatOpenAI(model=self.model, temperature=0,  max_tokens=256, openai_api_key=random.choice(Agent.api_key_list), base_url=Agent.base_url)
+            self.llm = ChatOpenAI(model=self.model, temperature=0,  max_tokens=256, openai_api_key=random.choice(Agent.api_key_list), base_url=api_base)
         else:
             raise NotImplementedError(f"Model {self.model} not implemented.")
         # 这个地方是定义的agent的类型，初始化位置的agent没有被使用

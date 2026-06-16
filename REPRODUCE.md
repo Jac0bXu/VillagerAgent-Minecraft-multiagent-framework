@@ -49,11 +49,21 @@ Create `API_KEY_LIST` in the repo root. The runner checks model-specific key gro
   "AGENT_KEY": ["openai-compatible-key"],
   "OPENAI": ["openai-key"],
   "GEMINI": ["gemini-key"],
-  "GLM": ["zhipu-or-glm-key"]
+  "GLM": ["zai-or-zhipu-glm-key"],
+  "ZAI": ["zai-glm-key"]
 }
 ```
 
-Start a Minecraft 1.19.2 server on the configured host/port, usually `localhost:25565`. The judgers issue `/op` for registered agents, but the server must allow commands/offline Mineflayer login.
+Start a Paper Minecraft 1.19.2 server on the configured host/port, usually `localhost:25565`. The judgers issue `/op` for registered agents, but the server must allow commands/offline Mineflayer login.
+
+The local reproduction server used in this checkout is Paper build 307:
+
+```bash
+cd MCServer
+java -Xms1G -Xmx2G -jar paper-1.19.2-307.jar nogui
+```
+
+The existing `MCServer/server.properties` should keep `online-mode=false`, `level-type=flat`, `difficulty=peaceful`, `gamemode=survival`, and `server-port=25565`.
 
 ## Generate Paper Configs
 
@@ -68,6 +78,18 @@ python scripts/generate_paper_configs.py \
   --port 25565
 ```
 
+For the current Poe-backed reproduction, use `gpt-4o` through Poe's OpenAI-compatible endpoint:
+
+```bash
+python scripts/generate_paper_configs.py \
+  --suite all \
+  --api-model gpt-4o \
+  --api-base https://api.poe.com/v1 \
+  --host localhost \
+  --port 25565 \
+  --output-dir paper_configs/full_poe_gpt4o
+```
+
 This writes:
 
 - `paper_configs/gpt_4_1106_preview_paper_construction_config.json`
@@ -77,9 +99,16 @@ This writes:
 Generate GLM/Gemini configs by changing `--api-model`, for example:
 
 ```bash
-python scripts/generate_paper_configs.py --suite all --api-model glm-4
+python scripts/generate_paper_configs.py \
+  --suite all \
+  --api-model glm-4.5 \
+  --api-base https://api.z.ai/api/anthropic
 python scripts/generate_paper_configs.py --suite all --api-model gemini-pro
 ```
+
+GLM runs use z.ai's Anthropic-compatible Messages endpoint. The local GLM
+adapter also normalizes older OpenAI-compatible GLM bases to this endpoint so
+`glm-4.5` works with the GLM Coding Plan.
 
 For a cheap smoke test, generate one task first:
 
@@ -99,6 +128,23 @@ python start_with_config.py --config paper_configs/gpt_4_1106_preview_paper_cons
 python start_with_config.py --config paper_configs/gpt_4_1106_preview_paper_farming_config.json
 python start_with_config.py --config paper_configs/gpt_4_1106_preview_paper_escape_config.json
 ```
+
+In this Ubuntu workspace, use the portable `.venv`:
+
+```bash
+MPLCONFIGDIR=/tmp/matplotlib-villager XDG_CACHE_HOME=/tmp/.cache-villager \
+  .venv/bin/python start_with_config.py \
+  --config paper_configs/full_poe_gpt4o/gpt_4o_paper_construction_config.json
+```
+
+The latest Paper smoke rerun used `/tmp/villager_poe_construction_task0_smoke.json` and wrote:
+
+- `result/gpt_4o_poe_construction_task0_2p_smoke_20260615/score.json`
+- `result/gpt_4o_poe_construction_task0_2p_smoke_20260615/TM_history.json`
+- `result/gpt_4o_poe_construction_task0_2p_smoke_20260615/DM_query.json`
+- `result/gpt_4o_poe_construction_task0_2p_smoke_20260615/DM_history.json`
+- per-agent history and reflection files
+- `result/gpt_4o_poe_construction_task0_2p_smoke_20260615/action_log.json`
 
 Full reproduction is expensive: 225 Minecraft tasks per model for the main comparison, plus extra ablation repeats. Expect many LLM calls and long wall-clock time.
 

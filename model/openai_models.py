@@ -12,7 +12,7 @@ import random
 import httpx
 import base64
 
-from model.utils import extract_info
+from model.utils import extract_info, is_rcac_api_base, normalize_openai_api_base
 
 logging.basicConfig(
     level=logging.ERROR, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -48,9 +48,11 @@ class OpenAILanguageModel(AbstractLanguageModel):
             )  # if not set, use the default base path of "https://api.openai.com/v1"
         if api_base != "":
             # e.g. https://api.openai.com/v1/ or your custom url
+            api_base = normalize_openai_api_base(api_base)
             openai.api_base = api_base
             # logger.info(f"Using custom api_base {api_base}")
         self.api_base = api_base
+        self.is_rcac = is_rcac_api_base(self.api_base)
         if api_model == "" or api_model is None:
             api_model = os.environ.get("OPENAI_API_MODEL", "")
         if api_model != "":
@@ -218,7 +220,7 @@ class OpenAILanguageModel(AbstractLanguageModel):
         # logger.info("api")
         start_time = time.time()
 
-        if "qwen3" in model:
+        if "qwen3" in model and not self.is_rcac:
             completion = self.client.chat.completions.create(model=model, messages=messages, temperature=temperature, extra_body={"enable_thinking": False})
         else:
             completion = self.client.chat.completions.create(model=model, messages=messages, temperature=temperature)
@@ -509,4 +511,3 @@ class OpenAILanguageModel(AbstractLanguageModel):
                 logger.warning(e.__cause__)
                 raise e
                
-

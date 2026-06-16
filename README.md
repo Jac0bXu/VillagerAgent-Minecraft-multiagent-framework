@@ -168,6 +168,7 @@ Customize your private tasks in your Minecraft server with our VillagerAgent mul
    ```json
    {
       "OPENAI":["put your openai key here", ...],
+      "RCAC":["put your Purdue RCAC GenAI Studio key here", ...],
       "GEMINI":[...],
       "GLM":[...],
       ...
@@ -175,6 +176,7 @@ Customize your private tasks in your Minecraft server with our VillagerAgent mul
    ```
    - We might try calling multiple available APIs to break through the access limit.
    - Place this file in the root of the project directory.
+   - For Purdue RCAC GenAI Studio, use `api_base = "https://genai.rcac.purdue.edu/api"` and the model name shown in GenAI Studio, for example `"llama3.1:latest"`.
 
 ## QuickStart 🚀
 

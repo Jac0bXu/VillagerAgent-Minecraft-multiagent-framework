@@ -7,6 +7,8 @@
 - **Smoke tests**: ✅ All 3 scenarios pass (construction, farming, escape)
 - **Full reproduction**: 🔄 Construction tasks 0–4 + task 99 completed via Poe API (gpt-4o)
 - **Model used**: gpt-4o via Poe API (`https://api.poe.com/v1`) — original `gpt-4-1106-preview` no longer available
+- **Current local server**: ✅ Paper `git-Paper-307` for Minecraft 1.19.2 running on `localhost:25565`
+- **Latest smoke rerun**: ✅ `gpt_4o_poe_construction_task0_2p_smoke_20260615` completed on local Paper with BHR=100%, VHR=100%, efficiency=16.89, time=18s
 
 ## Completed Task Results
 
@@ -169,12 +171,20 @@ lsof -nP -iTCP:5001 -iTCP:5002 -sTCP:LISTEN | awk 'NR>1{print $2}' | xargs kill
 
 **Fix:** Updated `model/zhipu_model.py` `_supported_models` to include `glm-4.5`, `glm-4.5-air`, `glm-4.6`, `glm-4.7`, `glm-5`, `glm-5-turbo`, `glm-5.1`.
 
+### 10. Agent readiness check was too weak on Paper rerun
+
+**Root cause:** `wait_for_agents_ready()` treated `/post_ping` success as sufficient, but the first Paper rerun reached `env.get_init_state()` and immediately failed on `/post_environment_dict` for Alice.
+
+**Fix:** `env/env.py` now waits for both `/post_ping` and `/post_environment_dict` to succeed for every registered agent before continuing. This is startup robustness only; it does not change task decomposition, assignment, prompts, tools, scoring, or other experiment-surface behavior.
+
 ## Environment Setup
 
-- **MC Server**: localhost:25565, Minecraft 1.19.2, superflat, offline mode, peaceful, survival
+- **MC Server**: localhost:25565, Paper git-Paper-307 (Minecraft 1.19.2), superflat, offline mode, peaceful, survival
 - **Python**: .venv312 (Python 3.12)
 - **Node.js**: v20.19.6 with mineflayer
 - **Configs**: `paper_configs/full_poe_gpt4o/` (100+100+25=225 tasks)
+
+Note: in the current Ubuntu workspace, `.venv312` is not portable because its Python symlink points to an old absolute path. Use `.venv/bin/python` unless `.venv312` has been rebuilt locally.
 
 ## Run Commands
 
@@ -212,6 +222,10 @@ ls result/ | grep "gpt_4o_puzzle" | wc -l         # out of 25
 
 # Check MC server health
 lsof -nP -iTCP:25565 -sTCP:LISTEN
+
+# Start local Paper 1.19.2 server
+cd MCServer
+java -Xms1G -Xmx2G -jar paper-1.19.2-307.jar nogui
 
 # Check if experiment is still running
 ps aux | grep start_with_config | grep -v grep

@@ -2,6 +2,35 @@ import json
 import yaml
 import re
 
+
+def normalize_openai_api_base(api_base: str) -> str:
+    """Return the API root expected by OpenAI-compatible SDK clients."""
+    if not api_base:
+        return api_base
+
+    base = str(api_base).rstrip("/")
+    if base.lower().endswith("/chat/completions"):
+        return base[: -len("/chat/completions")]
+    return base
+
+
+def is_rcac_api_base(api_base: str) -> bool:
+    return "genai.rcac.purdue.edu" in str(api_base or "").lower()
+
+
+def is_openai_compatible_api(api_model: str, api_base: str = "") -> bool:
+    model = str(api_model or "").lower()
+    return (
+        is_rcac_api_base(api_base)
+        or "rcac" in model
+        or "purdue" in model
+        or ("gpt" in model and "llama" not in model)
+        or "qwen" in model
+        or "deepseek" in model
+        or "default" in model
+    )
+
+
 def find_correct_data(dict_data, guard_keys=[]):
     # 如果当前层包含正确的key，返回当前层
     hit = True
