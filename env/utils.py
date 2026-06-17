@@ -14,6 +14,47 @@ sys.path.append(os.getcwd())
 from model import openai_models
 
 
+def _copy_json_default(default):
+    if isinstance(default, dict):
+        return default.copy()
+    if isinstance(default, list):
+        return default.copy()
+    return default
+
+
+def safe_load_json(path, default=None, retries=3, delay=0.05):
+    """Read JSON that may be replaced by another process between ticks."""
+    for attempt in range(retries):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except FileNotFoundError:
+            return _copy_json_default(default)
+        except json.JSONDecodeError:
+            if attempt == retries - 1:
+                return _copy_json_default(default)
+            time.sleep(delay)
+
+    return _copy_json_default(default)
+
+
+def safe_write_json(path, value, indent=4):
+    """Atomically replace a JSON file read by another process."""
+    directory = os.path.dirname(path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+    tmp_path = f"{path}.{os.getpid()}.{threading.get_ident()}.tmp"
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(value, f, indent=indent)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, path)
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
+
 def install_chat_throttle(bot, min_interval=0.35):
     """Throttle Mineflayer chat/command sends so vanilla servers do not kick judgers."""
     raw_chat = bot.chat

@@ -22,8 +22,7 @@ dig_needed = args.dig_needed
 agent_names = args.agent_names.split(",")
 task_name = args.task_name
 
-with open(".cache/load_status.cache", "w") as f:
-    json.dump({"status": "loading"}, f, indent=4)
+safe_write_json(".cache/load_status.cache", {"status": "loading"})
 
 if not os.path.exists("result"):
     os.makedirs("result")
@@ -51,8 +50,7 @@ bot = mineflayer.createBot({
 last_time = time.time()
 start_time = None
 task_data = None
-with open("data/score.json", "w") as f:
-    json.dump([], f, indent=4)
+safe_write_json("data/score.json", [])
 
 complexity = 0
 max_action_time = 0
@@ -69,15 +67,13 @@ wait_interval = 600
 max_block_hit_rate = 0
 
 if not os.path.exists('data/blueprint_description_all.json'):
-    with open('data/blueprint_description_all.json', 'w') as f:
-        json.dump({}, f, indent=4)
+    safe_write_json('data/blueprint_description_all.json', {})
 
 def calculate_balance():
     # 计算每个agent的时间
-    if not os.path.exists('data/action_log.json'):
+    data = safe_load_json('data/action_log.json', default={})
+    if not data:
         return
-    with open('data/action_log.json', 'r') as f:
-        data = json.load(f)
     agent_time = []
     for name, actions in data.items():
         total_time = 0
@@ -219,8 +215,7 @@ def handleViewer(*args):
 
         task(blue_prints[select_idx])
 
-        with open(".cache/load_status.cache", "w") as f:
-            json.dump({"status": "loaded"}, f, indent=4)
+        safe_write_json(".cache/load_status.cache", {"status": "loaded"})
 
         global start_time
         start_time = time.time()
@@ -573,10 +568,7 @@ def handleViewer(*args):
     @On(bot, "time")
     def handle(this):
         def calculate_action_time():
-            if not os.path.exists('data/action_log.json'):
-                return 0
-            with open('data/action_log.json', 'r') as f:
-                data = json.load(f)
+            data = safe_load_json('data/action_log.json', default={})
             time_list = []
             for name, actions in data.items():
                 for action in actions:
@@ -617,20 +609,18 @@ def handleViewer(*args):
                 # else:
                 #     shutil.rmtree(os.path.join("result", task_name))
                 #     os.mkdir(os.path.join("result", task_name))
-                with open(os.path.join(os.path.join("result", task_name), "score.json"), "w") as f:
-                    json.dump({
-                        "block_hit_rate": block_hit_rate,
-                        "view_hit_rate": view_hit_rate,
-                        "efficiency": efficiency,
-                        "use_time": calculate_action_time(),
-                        "end_reason": "complete task",
-                        "complexity": complexity,
-                        "end_time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now_time))
-                    }, f, indent=4)
+                safe_write_json(os.path.join(os.path.join("result", task_name), "score.json"), {
+                    "block_hit_rate": block_hit_rate,
+                    "view_hit_rate": view_hit_rate,
+                    "efficiency": efficiency,
+                    "use_time": calculate_action_time(),
+                    "end_reason": "complete task",
+                    "complexity": complexity,
+                    "end_time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now_time))
+                })
                 shutil.move("data/action_log.json", os.path.join(os.path.join("result", task_name), "action_log.json"))
                 shutil.move("data/tokens.json", os.path.join(os.path.join("result", task_name), "tokens.json"))
-                with open(".cache/load_status.cache", "w") as f:
-                    json.dump({"status": "end"}, f, indent=4)
+                safe_write_json(".cache/load_status.cache", {"status": "end"})
 
             if start_time and now_time and calculate_action_time() > max_action_time and task_data:
                 efficiency = 1
@@ -641,18 +631,16 @@ def handleViewer(*args):
                 # else:
                 #     shutil.rmtree(os.path.join("result", task_name))
                 #     os.mkdir(os.path.join("result", task_name))
-                with open(os.path.join(os.path.join("result", task_name), "score.json"), "w") as f:
-                    json.dump({
-                        "block_hit_rate": block_hit_rate,
-                        "view_hit_rate": view_hit_rate,
-                        "efficiency": efficiency,
-                        "use_time": calculate_action_time(),
-                        "end_reason": "action time out",
-                        "complexity": complexity,
-                        "end_time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now_time))
-                    }, f, indent=4)
-                with open(".cache/load_status.cache", "w") as f:
-                    json.dump({"status": "end"}, f, indent=4)
+                safe_write_json(os.path.join(os.path.join("result", task_name), "score.json"), {
+                    "block_hit_rate": block_hit_rate,
+                    "view_hit_rate": view_hit_rate,
+                    "efficiency": efficiency,
+                    "use_time": calculate_action_time(),
+                    "end_reason": "action time out",
+                    "complexity": complexity,
+                    "end_time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now_time))
+                })
+                safe_write_json(".cache/load_status.cache", {"status": "end"})
 
             if start_time and now_time and now_time - start_time > max_time and task_data:
                 action_time = calculate_action_time()
@@ -667,18 +655,16 @@ def handleViewer(*args):
                 # else:
                 #     shutil.rmtree(os.path.join("result", task_name))
                 #     os.mkdir(os.path.join("result", task_name))
-                with open(os.path.join(os.path.join("result", task_name), "score.json"), "w") as f:
-                    json.dump({
-                        "block_hit_rate": block_hit_rate,
-                        "view_hit_rate": view_hit_rate,
-                        "efficiency": efficiency,
-                        "use_time": calculate_action_time(),
-                        "end_reason": "max time out",
-                        "complexity": complexity,
-                        "end_time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now_time))
-                    }, f, indent=4)
-                with open(".cache/load_status.cache", "w") as f:
-                    json.dump({"status": "end"}, f, indent=4)
+                safe_write_json(os.path.join(os.path.join("result", task_name), "score.json"), {
+                    "block_hit_rate": block_hit_rate,
+                    "view_hit_rate": view_hit_rate,
+                    "efficiency": efficiency,
+                    "use_time": calculate_action_time(),
+                    "end_reason": "max time out",
+                    "complexity": complexity,
+                    "end_time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now_time))
+                })
+                safe_write_json(".cache/load_status.cache", {"status": "end"})
 
             if last_update_time and start_time and task_data and last_update_time - start_time > wait_interval and now_time - last_update_time > wait_interval:
                 action_time = calculate_action_time()
@@ -693,21 +679,18 @@ def handleViewer(*args):
                 # else:
                 #     shutil.rmtree(os.path.join("result", task_name))
                 #     os.mkdir(os.path.join("result", task_name))
-                with open(os.path.join(os.path.join("result", task_name), "score.json"), "w") as f:
-                    json.dump({
-                        "block_hit_rate": block_hit_rate,
-                        "view_hit_rate": view_hit_rate,
-                        "efficiency": efficiency,
-                        "use_time": calculate_action_time(),
-                        "end_reason": "no better score in wait interval",
-                        "complexity": complexity,
-                        "end_time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now_time))
-                    }, f, indent=4)
-                with open(".cache/load_status.cache", "w") as f:
-                    json.dump({"status": "end"}, f, indent=4)
+                safe_write_json(os.path.join(os.path.join("result", task_name), "score.json"), {
+                    "block_hit_rate": block_hit_rate,
+                    "view_hit_rate": view_hit_rate,
+                    "efficiency": efficiency,
+                    "use_time": calculate_action_time(),
+                    "end_reason": "no better score in wait interval",
+                    "complexity": complexity,
+                    "end_time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now_time))
+                })
+                safe_write_json(".cache/load_status.cache", {"status": "end"})
 
-            with open(".cache/heart_beat.cache", "w") as f:
-                json.dump({"time": now_time}, f, indent=4)
+            safe_write_json(".cache/heart_beat.cache", {"time": now_time})
 
         if now_time - last_time > 20 and task_data:
             block_hit_rate = cal_block_hit_rate(task_data)
@@ -725,12 +708,10 @@ def handleViewer(*args):
 
             # bot.chat(f' complexity: {complexity}')
 
-            with open("data/score.json", "r") as f:
-                score = json.load(f)
+            score = safe_load_json("data/score.json", default=[])
             score.append(
                 {"time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()), "block_hit_rate": block_hit_rate,
                  "view_hit_rate": view_hit_rate})
-            with open("data/score.json", "w") as f:
-                json.dump(score, f, indent=4)
+            safe_write_json("data/score.json", score)
 
             last_time = now_time

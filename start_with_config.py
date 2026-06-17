@@ -7,6 +7,7 @@ import psutil
 
 import time
 from env.env import VillagerBench, env_type, Agent
+from env.utils import safe_load_json, safe_write_json
 from model.init_model import init_language_model
 from model.utils import is_rcac_api_base, normalize_openai_api_base
 
@@ -49,6 +50,118 @@ def move_if_exists(src: str, dst: str):
     if os.path.exists(src) and not os.path.exists(dst):
         os.makedirs(os.path.dirname(dst), exist_ok=True)
         shutil.move(src, dst)
+
+
+def safe_task_name(task_name: str) -> str:
+    return "".join(c if c.isalnum() or c in "._-" else "_" for c in task_name)
+
+
+def move_judger_log(task_name: str, result_dir: str):
+    src = os.path.join("logs", f"{safe_task_name(task_name)}_judger.log")
+    dst = os.path.join(result_dir, "judger.log")
+    if os.path.exists(src):
+        os.makedirs(result_dir, exist_ok=True)
+        if os.path.exists(dst):
+            os.remove(dst)
+        shutil.move(src, dst)
+
+
+def append_pipeline_log(task_name: str, exception: str, detail: str = None):
+    os.makedirs(".cache", exist_ok=True)
+    log_path = ".cache/pipeline_test_logs.json"
+    logs = safe_load_json(log_path, default=[])
+    if not isinstance(logs, list):
+        logs = []
+
+    entry = {
+        "task_name": task_name,
+        "time": time.time(),
+        "exception": exception
+    }
+    if detail:
+        entry["detail"] = detail
+    logs.append(entry)
+    safe_write_json(log_path, logs)
+
+
+def expected_judger_script(task_type: str):
+    return {
+        "construction": "env/build_judger.py",
+        "farming": "env/farm_craft_judger.py",
+        "puzzle": "env/escape_room_judger.py",
+        "auto": "env/auto_judger.py",
+        "meta": "env/meta_judger.py",
+        "gen": "env/llm_gen_judger.py",
+    }.get(task_type)
+
+
+def has_live_judger(parent: psutil.Process, task_type: str) -> bool:
+    expected_script = expected_judger_script(task_type)
+    if not expected_script:
+        return True
+    try:
+        children = parent.children(recursive=True)
+    except psutil.Error:
+        return False
+    for child in children:
+        try:
+            cmdline = child.cmdline()
+        except psutil.Error:
+            continue
+        if any(expected_script in part for part in cmdline):
+            return True
+    return False
+
+
+def kill_process_tree(parent: psutil.Process):
+    try:
+        children = parent.children(recursive=True)
+    except psutil.Error:
+        children = []
+    for child in children:
+        try:
+            child.kill()
+        except psutil.Error:
+            pass
+    try:
+        parent.kill()
+    except psutil.Error:
+        pass
+
+
+def write_task_config(config: dict) -> str:
+    result_dir = os.path.join("result", config["task_name"])
+    os.makedirs(result_dir, exist_ok=True)
+    safe_write_json(os.path.join(result_dir, "config.json"), config)
+    return result_dir
+
+
+def move_runtime_artifacts(result_dir: str):
+    move_if_exists("data/action_log.json",
+                   os.path.join(result_dir, "action_log.json"))
+    move_if_exists("data/tokens.json",
+                   os.path.join(result_dir, "tokens.json"))
+
+
+def finish_success(parent: psutil.Process, config: dict):
+    kill_process_tree(parent)
+    result_dir = write_task_config(config)
+    move_runtime_artifacts(result_dir)
+    move_judger_log(config["task_name"], result_dir)
+
+
+def finish_failure(parent: psutil.Process, config: dict, exception: str, detail: str = None):
+    print(exception)
+    append_pipeline_log(config["task_name"], exception, detail)
+    kill_process_tree(parent)
+    result_dir = write_task_config(config)
+    safe_write_json(os.path.join(result_dir, "failure.json"), {
+        "exception": exception,
+        "detail": detail,
+        "time": time.time()
+    })
+    move_runtime_artifacts(result_dir)
+    move_judger_log(config["task_name"], result_dir)
 
 
 def run(api_model: str, api_base: str, task_type: str, task_idx: int, agent_num: int, dig_needed: bool, max_task_num: int, task_goal: str, document_file: str, host: str, port: int, task_name: str, role: str = "same", api_key_list: list = None, document: dict = None):
@@ -206,12 +319,10 @@ if __name__ == "__main__":
             continue
         print(f"task {i+1}/{len(launch_config)} start")
         print("config:", config)
-        with open(".cache/meta_setting.json", "w") as f:
-            json.dump(config, f, indent=4)
+        safe_write_json(".cache/meta_setting.json", config)
         if config["task_type"] != "meta":
             config.pop("evaluation_arg", None) # 避免evaluation_arg的相关信息影响执行
-        with open(".cache/load_status.cache", "w") as f:
-            json.dump({"status": "start"}, f, indent=4)
+        safe_write_json(".cache/load_status.cache", {"status": "start"})
         if os.path.exists(".cache/heart_beat.cache"):
             os.remove(".cache/heart_beat.cache")
 
@@ -247,48 +358,53 @@ if __name__ == "__main__":
         process.start()
 
         parent = psutil.Process(process.pid)
+        loaded_seen_at = None
+        end_seen_at = None
+        judger_exit_grace_sec = float(os.getenv("VILLAGER_JUDGER_EXIT_GRACE_SEC", "5"))
+        score_grace_sec = float(os.getenv("VILLAGER_SCORE_GRACE_SEC", "5"))
 
         while True:
             time.sleep(1)
             try:
-                with open(".cache/load_status.cache", "r") as f:
-                    status = json.load(f)["status"]
+                status = safe_load_json(".cache/load_status.cache", default={}).get("status")
+
                 if status == "end":
-                    for child in parent.children(recursive=True):
-                        child.kill()
-                    parent.kill()
-                    result_dir = os.path.join("result", config["task_name"])
-                    os.makedirs(result_dir, exist_ok=True)
-                    with open(os.path.join(result_dir, "config.json"), "w") as f:
-                        json.dump(config, f, indent=4)
-                    move_if_exists("data/action_log.json",
-                                   os.path.join(result_dir, "action_log.json"))
-                    move_if_exists("data/tokens.json",
-                                   os.path.join(result_dir, "tokens.json"))
+                    if os.path.exists(score_path):
+                        finish_success(parent, config)
+                        break
+                    if end_seen_at is None:
+                        end_seen_at = time.time()
+                    elif time.time() - end_seen_at > score_grace_sec:
+                        finish_failure(parent, config, "env error", "load_status ended without score.json")
+                        break
+                    continue
+                end_seen_at = None
+
+                if status in ("error", "judger_error"):
+                    finish_failure(parent, config, "env error", f"load_status reported {status}")
                     break
+
+                if status == "loaded":
+                    if loaded_seen_at is None:
+                        loaded_seen_at = time.time()
+                    elif time.time() - loaded_seen_at > judger_exit_grace_sec and not os.path.exists(score_path) and not has_live_judger(parent, config["task_type"]):
+                        finish_failure(parent, config, "judger error", "judger process exited before score.json was written")
+                        break
+                else:
+                    loaded_seen_at = None
+
                 if os.path.exists(".cache/heart_beat.cache"):
-                    with open(".cache/heart_beat.cache", "r") as f:
-                        env_time = json.load(f)["time"]
-                        if time.time() - env_time > heartbeat_timeout_sec:
-                            print("env error")
-                            # pipeline test log save
-                            if os.path.exists(".cache"):
-                                if os.path.exists(f".cache/pipeline_test_logs.json"):
-                                    with open(f".cache/pipeline_test_logs.json", "r") as f:
-                                        logs = json.load(f)
-                                else:
-                                    logs = []
-                                logs.append({
-                                    "task_name": config["task_name"],
-                                    "time": time.time(),
-                                    "exception": "env error"
-                                })
-                                with open(f".cache/pipeline_test_logs.json", "w") as f:
-                                    json.dump(logs, f, indent=4)
-                            for child in parent.children(recursive=True):
-                                child.kill()
-                            parent.kill()
-                            break
+                    env_time = safe_load_json(".cache/heart_beat.cache", default={}).get("time")
+                    if env_time and time.time() - env_time > heartbeat_timeout_sec:
+                        finish_failure(parent, config, "env error", f"heartbeat stale for more than {heartbeat_timeout_sec} seconds")
+                        break
+
+                if not process.is_alive() and not os.path.exists(score_path):
+                    finish_failure(parent, config, "controller error", "task controller process exited before score.json was written")
+                    break
+                if os.path.exists(score_path):
+                    finish_success(parent, config)
+                    break
             except:
                 pass
 

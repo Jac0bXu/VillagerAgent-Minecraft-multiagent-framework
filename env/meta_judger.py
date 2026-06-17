@@ -691,10 +691,9 @@ def handleViewer(*args):
 def handle(this):
     def calculate_balance():
         # 计算每个agent的时间
-        if not os.path.exists('data/action_log.json'):
+        data = safe_load_json('data/action_log.json', default={})
+        if not data:
             return 0
-        with open('data/action_log.json', 'r') as f:
-            data = json.load(f)
         agent_time = []
         for name, actions in data.items():
             total_time = 0
@@ -712,10 +711,7 @@ def handle(this):
         return 1 - np.std(time_array)
 
     def calculate_action_time():
-        if not os.path.exists('data/action_log.json'):
-            return 0
-        with open('data/action_log.json', 'r') as f:
-            data = json.load(f)
+        data = safe_load_json('data/action_log.json', default={})
         time_list = []
         for name, actions in data.items():
             for action in actions:

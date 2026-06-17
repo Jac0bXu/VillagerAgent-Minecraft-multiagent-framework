@@ -21,8 +21,51 @@ import random
 import platform
 from model.utils import is_rcac_api_base, normalize_openai_api_base
 
+try:
+    import fcntl
+except ImportError:
+    fcntl = None
+
 env = os.environ.copy()
 env["PYTHONIOENCODING"] = "utf-8"
+_ACTION_LOG_THREAD_LOCK = threading.Lock()
+
+
+def _atomic_json_dump(path, data):
+    directory = os.path.dirname(path) or "."
+    os.makedirs(directory, exist_ok=True)
+    tmp_path = f"{path}.{os.getpid()}.{threading.get_ident()}.tmp"
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=4)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, path)
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
+
+def _append_action_log(action_log_path, agent_name, entry):
+    lock_path = f"{action_log_path}.lock"
+    with _ACTION_LOG_THREAD_LOCK:
+        with open(lock_path, "a", encoding="utf-8") as lock_file:
+            if fcntl is not None:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+            try:
+                try:
+                    with open(action_log_path, "r", encoding="utf-8") as f:
+                        action_log = json.load(f)
+                except (FileNotFoundError, json.JSONDecodeError):
+                    action_log = {}
+
+                if agent_name not in action_log:
+                    action_log[agent_name] = []
+                action_log[agent_name].append(entry)
+                _atomic_json_dump(action_log_path, action_log)
+            finally:
+                if fcntl is not None:
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 def filter_emoji(text: str) -> str:
     ret_str = []
@@ -88,19 +131,9 @@ def timeit(func):
         max_try = 3
         while max_try > 0:
             try:
-                # action log
                 action_log_path = "data/action_log.json"
-                if os.path.exists(action_log_path):
-                    with open(action_log_path, "r", encoding='utf-8') as f:
-                        action_log = json.load(f)
-                else:
-                    action_log = {}
                 agent_name = kwargs["player_name"] # 第一个参数是 agent_name
-                if agent_name not in action_log:
-                    action_log[agent_name] = []
-                
-                # 注意：args, kwargs 和 result 需要是可序列化的
-                action_log[agent_name].append({
+                entry = {
                     "action": func.__name__,
                     # "time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     "start_time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(start_time)),
@@ -108,11 +141,8 @@ def timeit(func):
                     "duration": end_time - start_time,
                     "kwargs": kwargs,  # kwargs 可能包含不可序列化的对象
                     "result": result,  # result 可能包含不可序列化的对象
-                })
-                
-                # 写入文件
-                with open(action_log_path, "w", encoding='utf-8') as f:
-                    json.dump(action_log, f, indent=4)
+                }
+                _append_action_log(action_log_path, agent_name, entry)
                 break
             except Exception as e:
                 print(e)

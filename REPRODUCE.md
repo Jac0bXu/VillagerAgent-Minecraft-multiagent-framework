@@ -119,6 +119,38 @@ python scripts/generate_paper_configs.py \
   --output-dir paper_configs/smoke
 ```
 
+## Generate A Quick Difficulty Subset
+
+For faster methodology checks, generate a compact config with 1-3 tasks per
+difficulty level per scenario. Construction and farming are bucketed by the
+same complexity formulas used by their judgers; escape uses the paper's
+`max_task_num` levels 1-5.
+
+```bash
+.venv/bin/python scripts/run_quick_subset.py \
+  --source-dir paper_configs/full_poe_gpt4o \
+  --per-level 1
+```
+
+This writes a combined config plus metadata under
+`paper_configs/quick_subset/`. With `--per-level 1`, the default all-scenario
+subset has 11 tasks: 3 construction, 3 farming, and 5 escape. With
+`--per-level 3`, it has 33 tasks.
+
+Run the subset directly by adding `--run`:
+
+```bash
+MPLCONFIGDIR=/tmp/matplotlib-villager XDG_CACHE_HOME=/tmp/.cache-villager \
+  .venv/bin/python scripts/run_quick_subset.py \
+  --source-dir paper_configs/full_poe_gpt4o \
+  --per-level 1 \
+  --run
+```
+
+By default the script appends `_quick_subset` to each `task_name`, so old full
+run result folders do not cause `start_with_config.py` to skip the task. Change
+`--task-name-suffix` when you want a fresh rerun of the same quick subset.
+
 ## Run Experiments
 
 Run one config file at a time:

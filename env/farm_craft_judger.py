@@ -35,8 +35,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     agent_names = args.agent_names.split(",")
-    with open(".cache/load_status.cache", "w") as f:
-        json.dump({"status": "loading"}, f, indent=4)
+    safe_write_json(".cache/load_status.cache", {"status": "loading"})
 
     if not os.path.exists("result"):
         os.makedirs("result")
@@ -323,8 +322,7 @@ if __name__ == '__main__':
             start_time = time.time()
             last_time = start_time
 
-            with open(".cache/load_status.cache", "w") as f:
-                json.dump({"status": "loaded"}, f, indent=4)
+            safe_write_json(".cache/load_status.cache", {"status": "loaded"})
 
         t = threading.Thread(target=init, args=())
         t.start()
@@ -334,10 +332,9 @@ if __name__ == '__main__':
     def handleTime(*args):
         def calculate_balance():
             # 计算每个agent的时间
-            if not os.path.exists('data/action_log.json'):
+            data = safe_load_json('data/action_log.json', default={})
+            if not data:
                 return
-            with open('data/action_log.json', 'r') as f:
-                data = json.load(f)
             agent_time = []
             for action_name, actions in data.items():
                 total_time = 0
@@ -355,10 +352,7 @@ if __name__ == '__main__':
             return 1 - np.std(time_array)
 
         def calculate_action_time():
-            if not os.path.exists('data/action_log.json'):
-                return 0
-            with open('data/action_log.json', 'r') as f:
-                data = json.load(f)
+            data = safe_load_json('data/action_log.json', default={})
             time_list = []
             for name, actions in data.items():
                 for action in actions:
@@ -403,8 +397,7 @@ if __name__ == '__main__':
             now_time = time.time()
 
             if now_time - last_time > 1:
-                with open(".cache/heart_beat.cache", "w") as f:
-                    json.dump({"time": now_time}, f, indent=4)
+                safe_write_json(".cache/heart_beat.cache", {"time": now_time})
                 if score == 100:
                     efficiency = max_action_time / calculate_action_time()
                     # 给出结束信号和写入文件
@@ -413,18 +406,16 @@ if __name__ == '__main__':
                     # else:
                     #     shutil.rmtree(os.path.join("result", task_name))
                     #     os.mkdir(os.path.join("result", task_name))
-                    with open(os.path.join(os.path.join("result", task_name), "score.json"), "w") as f:
-                        json.dump({
-                            "score": score,
-                            "cooperation": cooperation,
-                            "efficiency": efficiency,
-                            "balance": calculate_balance(),
-                            "use_time": calculate_action_time(),
-                            "end_reason": "complete task",
-                            "end_time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now_time))
-                        }, f, indent=4)
-                    with open(".cache/load_status.cache", "w") as f:
-                        json.dump({"status": "end"}, f, indent=4)
+                    safe_write_json(os.path.join(os.path.join("result", task_name), "score.json"), {
+                        "score": score,
+                        "cooperation": cooperation,
+                        "efficiency": efficiency,
+                        "balance": calculate_balance(),
+                        "use_time": calculate_action_time(),
+                        "end_reason": "complete task",
+                        "end_time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now_time))
+                    })
+                    safe_write_json(".cache/load_status.cache", {"status": "end"})
 
                 if calculate_action_time() > max_action_time:
                     efficiency = 1
@@ -433,18 +424,16 @@ if __name__ == '__main__':
                     # else:
                     #     shutil.rmtree(os.path.join("result", task_name))
                     #     os.mkdir(os.path.join("result", task_name))
-                    with open(os.path.join(os.path.join("result", task_name), "score.json"), "w") as f:
-                        json.dump({
-                            "score": score,
-                            "cooperation": cooperation,
-                            "efficiency": efficiency,
-                            "balance": calculate_balance(),
-                            "use_time": calculate_action_time(),
-                            "end_reason": "action time out",
-                            "end_time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now_time))
-                        }, f, indent=4)
-                    with open(".cache/load_status.cache", "w") as f:
-                        json.dump({"status": "end"}, f, indent=4)
+                    safe_write_json(os.path.join(os.path.join("result", task_name), "score.json"), {
+                        "score": score,
+                        "cooperation": cooperation,
+                        "efficiency": efficiency,
+                        "balance": calculate_balance(),
+                        "use_time": calculate_action_time(),
+                        "end_reason": "action time out",
+                        "end_time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now_time))
+                    })
+                    safe_write_json(".cache/load_status.cache", {"status": "end"})
 
                 if now_time - start_time > max_time:
                     action_time = calculate_action_time()
@@ -457,18 +446,16 @@ if __name__ == '__main__':
                     # else:
                     #     shutil.rmtree(os.path.join("result", task_name))
                     #     os.mkdir(os.path.join("result", task_name))
-                    with open(os.path.join(os.path.join("result", task_name), "score.json"), "w") as f:
-                        json.dump({
-                            "score": score,
-                            "cooperation": cooperation,
-                            "efficiency": efficiency,
-                            "balance": calculate_balance(),
-                            "use_time": calculate_action_time(),
-                            "end_reason": "max time out",
-                            "end_time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now_time))
-                        }, f, indent=4)
-                    with open(".cache/load_status.cache", "w") as f:
-                        json.dump({"status": "end"}, f, indent=4)
+                    safe_write_json(os.path.join(os.path.join("result", task_name), "score.json"), {
+                        "score": score,
+                        "cooperation": cooperation,
+                        "efficiency": efficiency,
+                        "balance": calculate_balance(),
+                        "use_time": calculate_action_time(),
+                        "end_reason": "max time out",
+                        "end_time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now_time))
+                    })
+                    safe_write_json(".cache/load_status.cache", {"status": "end"})
 
                 
 
