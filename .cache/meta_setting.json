@@ -1,14 +1,14 @@
 {
-    "api_model": "gpt-4o",
-    "api_base": "https://api.poe.com/v1",
-    "task_type": "construction",
-    "task_idx": 99,
+    "api_model": "gpt-oss:120b",
+    "api_base": "https://genai.rcac.purdue.edu/api",
+    "task_type": "farming",
+    "task_idx": 47,
     "agent_num": 2,
     "dig_needed": false,
     "max_task_num": 0,
-    "task_goal": "Using the provided blueprint, please collaborate to place blocks in Minecraft. You can use materials from both your inventory and the chest. The task is complete once the blueprint is fully built.",
-    "document_file": "data/map_description.json",
+    "task_goal": "You are on a farm where you need to collaborate to make a rabbit_stew. Some ingredients are contained within chests, and if the ingredients are not in the chests, you may need to work together to acquire them. Crafting table is placed to craft items",
+    "document_file": "data/recipe_hint.json",
     "host": "localhost",
     "port": 25565,
-    "task_name": "gpt_4o_construction_task99_2p"
+    "task_name": "rcac_gpt_oss_120b_farming_task47_2p"
 }
